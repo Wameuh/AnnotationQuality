@@ -110,39 +110,6 @@ class TestLogger(unittest.TestCase):
         for level_value in ["0", "1", "2", "3"]:
             self.assertNotIn(f"[{level_value}]", output)
 
-    def test_context_logger_debug_level(self):
-        """Test context logger when level is DEBUG."""
-        logger = Logger(level=LogLevel.DEBUG, output=self.stdout)
-        
-        def test_function():
-            ctxLog = logger.logScope()  # Log entry
-            # Function body
-            # Log exit will happen when ctxLog is destroyed
-        
-        test_function()
-        output = self.stdout.getvalue()
-        
-        # Check for function entry and exit markers
-        self.assertIn("++ test_function() ++", output)
-        self.assertIn("-- test_function() --", output)
-        self.assertIn("[DEBUG]", output)
-        self.assertIn("File:", output)
-        self.assertIn("Line:", output)
-
-    def test_context_logger_info_level(self):
-        """Test context logger when level is INFO."""
-        logger = Logger(level=LogLevel.INFO, output=self.stdout)
-        
-        def test_function():
-            ctxLog = logger.logScope()  # Should not log at INFO level
-            # Function body
-        
-        test_function()
-        output = self.stdout.getvalue()
-        
-        # Nothing should be logged at INFO level
-        self.assertEqual(output.strip(), "")
-
     def test_error_message_always_shows(self):
         """Test that error messages show at all levels."""
         for level in LogLevel:
@@ -153,6 +120,102 @@ class TestLogger(unittest.TestCase):
             self.assertIn(test_message, output)
             self.assertIn("[ERROR]", output)
             self.stdout = StringIO()  # Reset output buffer
+
+    def test_function_decorator_debug_level(self):
+        """Test the function decorator when level is DEBUG."""
+        logger = Logger(level=LogLevel.DEBUG, output=self.stdout)
+        
+        @logger.logScope
+        def test_function():
+            logger.info("Inside function")
+        
+        test_function()
+        output = self.stdout.getvalue()
+        
+        # Check for function entry and exit markers
+        self.assertIn("++ test_function() ++", output)
+        self.assertIn("-- test_function() --", output)
+        self.assertIn("[DEBUG]", output)
+        self.assertIn("File:", output)
+        self.assertIn("Line:", output)
+        self.assertIn("Inside function", output)
+
+    def test_function_decorator_info_level(self):
+        """Test the function decorator when level is INFO."""
+        logger = Logger(level=LogLevel.INFO, output=self.stdout)
+        
+        @logger.logScope
+        def test_function():
+            logger.info("Inside function")
+        
+        test_function()
+        output = self.stdout.getvalue()
+        
+        # Only the INFO message should be logged, not the entry/exit
+        self.assertNotIn("++ test_function() ++", output)
+        self.assertNotIn("-- test_function() --", output)
+        self.assertIn("Inside function", output)
+
+    def test_function_decorator_with_args(self):
+        """Test the function decorator with arguments."""
+        logger = Logger(level=LogLevel.DEBUG, output=self.stdout)
+        
+        @logger.logScope
+        def test_function(x, y, name="test"):
+            logger.info(f"Processing {x}, {y}, {name}")
+            return x + y
+        
+        result = test_function(5, 3, name="example")
+        output = self.stdout.getvalue()
+        
+        # Check function execution
+        self.assertEqual(result, 8)
+        # Check logs
+        self.assertIn("++ test_function() ++", output)
+        self.assertIn("Processing 5, 3, example", output)
+        self.assertIn("-- test_function() --", output)
+
+    def test_function_decorator_exception(self):
+        """Test the function decorator with exception handling."""
+        logger = Logger(level=LogLevel.DEBUG, output=self.stdout)
+        
+        @logger.logScope
+        def failing_function():
+            raise ValueError("Test error")
+        
+        with self.assertRaises(ValueError):
+            failing_function()
+        
+        output = self.stdout.getvalue()
+        
+        # Check all logging occurred
+        self.assertIn("++ failing_function() ++", output)
+        self.assertIn("-- failing_function() --", output)
+        self.assertIn("[ERROR]", output)
+        self.assertIn("Exception in failing_function: Test error", output)
+
+    def test_set_level(self):
+        """Test changing log level dynamically."""
+        logger = Logger(level=LogLevel.ERROR, output=self.stdout)
+        test_message = "Test message"
+        
+        logger.info(test_message)
+        self.assertEqual(self.stdout.getvalue().strip(), "")  # Nothing should be printed
+        
+        logger.set_level(LogLevel.INFO)
+        logger.info(test_message)
+        self.assertIn(test_message, self.stdout.getvalue())
+
+    def test_invalid_output_handler(self):
+        """Test logger behavior with invalid output handler."""
+        class InvalidOutput:
+            pass
+        
+        logger = Logger(level=LogLevel.INFO, output=InvalidOutput())
+        test_message = "Test message"
+        
+        # Should not raise exception but fall back to stderr
+        logger.info(test_message)
 
 if __name__ == '__main__':
     unittest.main() 

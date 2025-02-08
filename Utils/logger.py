@@ -6,7 +6,7 @@ from typing import TextIO
 import os
 import io
 from enum import Enum
-
+from functools import wraps
 class LogLevel(Enum):
     """Enumeration of available log levels."""
     DEBUG = 0  # Most verbose
@@ -21,7 +21,7 @@ class ContextLogger:
     and exited (at destruction), including file name, line number, and thread information.
     """
 
-    def __init__(self, logger: 'Logger'):
+    def __init__(self, logger: 'Logger', func):
         """
         Initialize the context logger and log the function entry.
 
@@ -29,27 +29,18 @@ class ContextLogger:
             logger (Logger): The logger instance to use for logging.
         """
         self.logger = logger
-        self.function_name = None
-        self.function_file = None
-        self.function_line = None
-        
+        self.function_name = func.__name__
+        self.function_file = os.path.basename(func.__code__.co_filename)
+        self.function_line = func.__code__.co_firstlineno
         try:
             if self.logger.level.value <= LogLevel.DEBUG.value:
-                caller_frame = inspect.stack()[2].frame
-                self._initialize_context(caller_frame)
+                entry_message = (f"File: {self.function_file} | "
+                            f"Line: {self.function_line} | "
+                            f"++ {self.function_name}() ++")
+                self.logger.debug(entry_message)
         except Exception as e:
             self.logger.warning(f"Failed to initialize logging context: {str(e)}")
 
-    def _initialize_context(self, caller_frame):
-        """Initialize context information and log function entry."""
-        self.function_file = os.path.basename(caller_frame.f_code.co_filename)
-        self.function_line = caller_frame.f_lineno
-        self.function_name = caller_frame.f_code.co_name
-
-        entry_message = (f"File: {self.function_file} | "
-                       f"Line: {self.function_line} | "
-                       f"++ {self.function_name}() ++")
-        self.logger.debug(entry_message)
 
     def __del__(self):
         """Log function exit when the object is destroyed."""
@@ -66,14 +57,19 @@ class Logger:
     Supports context-based logging for function entry/exit points.
     """
 
-    def __init__(self, level: LogLevel = LogLevel.INFO, output: TextIO = sys.stdout):
+    def __init__(self, level: LogLevel = LogLevel.DEBUG, output: TextIO = sys.stdout):
         """
         Initialize the Logger.
 
         Args:
-            level (LogLevel): The logging level. Defaults to LogLevel.INFO.
+            level (LogLevel): The logging level. Defaults to LogLevel.DEBUG.
             output (TextIO): Output stream to write logs to. Defaults to sys.stdout.
+            
+        Raises:
+            ValueError: If level is not a valid LogLevel
         """
+        if not isinstance(level, LogLevel):
+            raise ValueError("Level must be a valid LogLevel enum value")
         self.level = level
         self.output = output
 
@@ -137,18 +133,52 @@ class Logger:
         self._log(LogLevel.DEBUG, message)
 
     def set_level(self, level: LogLevel) -> None:
-        """Change the logging level."""
+        """
+        Change the logging level.
+        
+        Args:
+            level (LogLevel): The new logging level
+            
+        Raises:
+            ValueError: If level is not a valid LogLevel
+        """
+        if not isinstance(level, LogLevel):
+            raise ValueError("Level must be a valid LogLevel enum value")
         self.level = level
 
-    def logScope(self) -> ContextLogger:
-        """Create a context manager for function entry/exit logging."""
-        try:
-            return ContextLogger(self)
-        except Exception as e:
-            self.error(f"Failed to create logging context: {str(e)}")
-            # Create a dummy context logger with an ERROR-level logger
-            error_logger = Logger(level=LogLevel.ERROR, output=self.output)
-            return ContextLogger(error_logger)
+    def logScope(self, func):
+        """
+        Decorator for logging function entry and exit.
+        
+        Args:
+            func: The function to be decorated
+            
+        Returns:
+            The wrapped function with logging
+        
+        Usage:
+            @logger.logScope
+            def my_function():
+                # Function code here
+        """
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Create a context logger   
+            logscope = ContextLogger(self, func)
+            try:
+                # Execute the function
+                result = func(*args, **kwargs)
+
+                return result
+            except Exception as e:
+                # Log any exception that occurs
+                self.error(f"Exception in {func.__name__}: {str(e)}")
+                raise
+            finally:
+                # Context logger will be destroyed here, logging the exit
+                del logscope
+        return wrapper
 
 
 

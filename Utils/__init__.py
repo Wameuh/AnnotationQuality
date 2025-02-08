@@ -1,2 +1,2 @@
-# Ce fichier peut rester vide
-# Il permet à Python de traiter le répertoire comme un package 
+# This file can remain empty
+# It allows Python to treat the directory as a package

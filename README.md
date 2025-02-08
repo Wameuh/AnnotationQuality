@@ -28,12 +28,14 @@ Different methods exist for calculating IAA:
 
 It is important to note that **the choice of IAA measure depends on the nature of the data and the annotation task** [1]. Additionally, IAA should not be considered an end in itself, but rather as a tool to understand the data and improve the annotation process. Disagreements between annotators can provide valuable insights [1, 9].
 
-
 ## IAA-Eval: Features and Usage
 
 **IAA-Eval** is designed to be a user-friendly CLI tool with the following key features:
 
 * **Data Loading and Preprocessing:** Reads annotation data from various file formats, including CSV and JSON. Supports different annotation types (categorical, numerical, etc.)
+
+* **Test Data Note:** For testing purposes, the file `Tests/Assets/Reviews_annotated.csv` has been generated using the program available at [LLM-Tests](https://github.com/Wameuh/LLM-Tests), which provides sentiment annotations for Amazon reviews.
+
 * **IAA Calculation:** Computes various IAA metrics, including Cohen's Kappa, Fleiss' Kappa, Krippendorff's Alpha, and F-measure. Enables pairwise and overall IAA calculation [1].
 * **Data Filtering:** Allows for data filtering by annotator or item to assess agreement subsets.
 * **Visualization:**  Generates graphs and tables to present IAA results clearly, aiding in interpretation. Provides options for saving these visualizations to files.
@@ -91,6 +93,7 @@ iaa-eval --input annotations.csv --format csv --annotator_col annotator_id --ite
 ## Bibliography
 
 [1] Artstein, R. (2017). Inter-annotator Agreement. In: Ide, N., Pustejovsky, J. (eds) Handbook of Linguistic Annotation. Springer, Dordrecht. https://doi.org/10.1007/978-94-024-0881-2_11
+
 [2] Vámos, Csilla et al. ‘Ontology of Active and Passive Environmental Exposure’. 1 Jan. 2024 : 1733 – 1761
 [3] Cheng, Xiang, Raveesh Mayya, and João Sedoc. "From Human Annotation to LLMs: SILICON Annotation Workflow for Management Research." *arXiv preprint arXiv:2412.14461* (2024).
 [4] Reyero Lobo, Paula, et al. "Enhancing Hate Speech Annotations with Background Semantics."  *ECAI 2024* . IOS Press, 2024. 3923-3930.

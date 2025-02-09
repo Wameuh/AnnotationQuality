@@ -82,7 +82,7 @@ class Logger:
 
         Args:
             level (LogLevel): The logging level. Defaults to LogLevel.DEBUG.
-            output (TextIO): Output stream to write logs to. Defaults to stdout.
+            output (TextIO): Output stream to write logs to. Defaults to stdout
 
         Raises:
             ValueError: If level is not a valid LogLevel
@@ -99,13 +99,17 @@ class Logger:
             self.output.flush()
         except AttributeError as e:
             sys.stderr.write("Logger error: Output is not writable\n")
-            err_msg = (f"Logger error: Failed to write message: "
-                      f"message {message}, error {str(e)}\n")
+            err_msg = (
+                f"Logger error: Failed to write message: "
+                f"message {message}, error {str(e)}\n"
+            )
             sys.stderr.write(err_msg)
             sys.stderr.flush()
         except Exception as e:
-            err_msg = (f"Logger error: Failed to write message: "
-                      f"message {message}, error {str(e)}\n")
+            err_msg = (
+                f"Logger error: Failed to write message: "
+                f"message {message}, error {str(e)}\n"
+            )
             sys.stderr.write(err_msg)
             sys.stderr.flush()
 
@@ -118,12 +122,15 @@ class Logger:
             message (str): The message to log
 
         Returns:
-            str: The formatted message with timestamp, thread ID, and level name
+            str: The formatted message with timestamp, thread ID,
+                                                                and level name
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         thread_id = threading.get_ident()
-        return (f"[{timestamp}] [TID: {thread_id}] "
-                f"[{level.name}] {message}\n")
+        return (
+            f"[{timestamp}] [TID: {thread_id}] "
+            f"[{level.name}] {message}\n"
+        )
 
     def _log(self, level: LogLevel, message: str) -> None:
         """
@@ -192,7 +199,3 @@ class Logger:
                     self.error(f"Exception in {func.__name__}: {str(e)}")
                     raise
         return wrapper
-
-
-
-

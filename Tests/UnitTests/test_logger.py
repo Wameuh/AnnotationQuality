@@ -91,6 +91,7 @@ def test_context_logger_enter_exception():
     context = ContextLogger(BrokenLogger(), lambda: None)
     context.__enter__()  # Should catch exception and continue
 
+
 def test_set_level():
     logger = Logger(level=LogLevel.DEBUG)
     logger.set_level(LogLevel.INFO)
@@ -106,15 +107,9 @@ def test_logger_attribute_error():
     logger = Logger(output=NoWriteOutput())
     logger.error("Test message")  # Should handle AttributeError
 
-def test_level_invalid_type():
-    """Test setting level with invalid type raises ValueError"""
-    
-    with pytest.raises(ValueError, match="Level must be a valid LogLevel enum value"):
-        logger = Logger(level="INVALID")
 
 def test_write_attribute_error(capsys):
     """Test handling of AttributeError in __write__"""
-
     class BrokenOutput:
         def flush(self):
             pass
@@ -127,13 +122,13 @@ def test_write_attribute_error(capsys):
     assert "Logger error: Output is not writable" in captured.err
     assert "Failed to write message" in captured.err
 
-def test_write_error(capsys):
-    """Test handling of AttributeError in __write__"""
 
+def test_write_error(capsys):
+    """Test handling of general exceptions in __write__"""
     class BrokenOutput:
         def write(self):
             raise Exception("Write error")
-        # Write error wil raise Exception
+        # Write error will raise Exception
 
     logger = Logger(output=BrokenOutput())
     logger.info("Test message")
@@ -145,14 +140,15 @@ def test_write_error(capsys):
 def test_set_level_with_invalid_type():
     """Test setting level with invalid type raises ValueError"""
     logger = Logger()
-    
+
     invalid_levels = [
         None,
         42,
         "DEBUG",  # String instead of LogLevel enum
         object(),  # Random object
     ]
-    
+
     for invalid_level in invalid_levels:
-        with pytest.raises(ValueError, match="Level must be a valid LogLevel enum value"):
-            logger.set_level(invalid_level) 
+        with pytest.raises(ValueError,
+                           match="Level must be a valid LogLevel enum value"):
+            logger.set_level(invalid_level)

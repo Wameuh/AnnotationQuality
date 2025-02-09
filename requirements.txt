@@ -1,0 +1,10 @@
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+
+# Code Quality
+flake8>=6.1.0
+black>=23.7.0
+
+# Project Dependencies
+# (ajoutez ici les dépendances spécifiques à votre projet) 

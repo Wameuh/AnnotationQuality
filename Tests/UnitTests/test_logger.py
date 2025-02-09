@@ -137,6 +137,14 @@ def test_write_error(capsys):
     assert "Logger error: Failed to write message" in captured.err
 
 
+def test_level_invalid_type():
+    """Test setting level with invalid type raises ValueError"""
+
+    with pytest.raises(ValueError,
+                       match="Level must be a valid LogLevel enum value"):
+        Logger(level="INVALID")
+
+
 def test_set_level_with_invalid_type():
     """Test setting level with invalid type raises ValueError"""
     logger = Logger()

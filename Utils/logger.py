@@ -1,10 +1,8 @@
 import sys
-import inspect
 import threading
 from datetime import datetime
 from typing import TextIO
 import os
-import io
 from enum import Enum
 from functools import wraps
 
@@ -21,7 +19,8 @@ class ContextLogger:
     """
     A logger for function entry and exit points.
     This class automatically logs when a function is entered (at creation)
-    and exited (at destruction), including file name, line number, and thread information.
+    and exited (at destruction), including file name, line number,
+    and thread information.
     """
     def __init__(self, logger: 'Logger', func):
         """
@@ -47,12 +46,14 @@ class ContextLogger:
                 self.logger.debug(entry_message)
             return self
         except Exception as e:
-            self.logger.warning(f"Failed to initialize logging context: {str(e)}")
+            self.logger.warning(
+                f"Failed to initialize logging context: {str(e)}"
+            )
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
         Log function exit when the context is exited.
-        
+
         Args:
             exc_type: The type of the exception that occurred, if any
             exc_value: The instance of the exception that occurred, if any
@@ -74,14 +75,15 @@ class Logger:
     with optional verbosity control and function call tracing.
     Supports context-based logging for function entry/exit points.
     """
-    def __init__(self, level: LogLevel = LogLevel.DEBUG, output: TextIO = sys.stdout):
+    def __init__(self, level: LogLevel = LogLevel.DEBUG,
+                 output: TextIO = sys.stdout):
         """
         Initialize the Logger.
 
         Args:
             level (LogLevel): The logging level. Defaults to LogLevel.DEBUG.
-            output (TextIO): Output stream to write logs to. Defaults to sys.stdout.
-            
+            output (TextIO): Output stream to write logs to. Defaults to stdout
+
         Raises:
             ValueError: If level is not a valid LogLevel
         """
@@ -97,30 +99,42 @@ class Logger:
             self.output.flush()
         except AttributeError as e:
             sys.stderr.write("Logger error: Output is not writable\n")
-            sys.stderr.write(f"Logger error: Failed to write message: message {message}, error {str(e)}\n")
+            err_msg = (
+                f"Logger error: Failed to write message: "
+                f"message {message}, error {str(e)}\n"
+            )
+            sys.stderr.write(err_msg)
             sys.stderr.flush()
         except Exception as e:
-            sys.stderr.write(f"Logger error: Failed to write message: message {message}, error {str(e)}\n")
+            err_msg = (
+                f"Logger error: Failed to write message: "
+                f"message {message}, error {str(e)}\n"
+            )
+            sys.stderr.write(err_msg)
             sys.stderr.flush()
 
     def _format_message(self, level: LogLevel, message: str) -> str:
         """
         Format a log message according to the configured format.
-        
+
         Args:
             level (LogLevel): The log level (DEBUG, INFO, WARNING, ERROR)
             message (str): The message to log
-            
+
         Returns:
-            str: The formatted message with timestamp, thread ID, and level name
+            str: The formatted message with timestamp, thread ID,
+                                                                and level name
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         thread_id = threading.get_ident()
-        return f"[{timestamp}] [TID: {thread_id}] [{level.name}] {message}\n"
+        return (
+            f"[{timestamp}] [TID: {thread_id}] "
+            f"[{level.name}] {message}\n"
+        )
 
     def _log(self, level: LogLevel, message: str) -> None:
         """
-        Log a message if its level is greater than or equal to the logger's level.
+        Log a message if its level is greater than or equal to logger's level.
 
         Args:
             level (LogLevel): The level of the message.
@@ -149,10 +163,10 @@ class Logger:
     def set_level(self, level: LogLevel) -> None:
         """
         Change the logging level.
-        
+
         Args:
             level (LogLevel): The new logging level
-            
+
         Raises:
             ValueError: If level is not a valid LogLevel
         """
@@ -163,13 +177,13 @@ class Logger:
     def log_scope(self, func):
         """
         Decorator for logging function entry and exit.
-        
+
         Args:
             func: The function to be decorated
-            
+
         Returns:
             The wrapped function with logging
-        
+
         Usage:
             @logger.log_scope
             def my_function():
@@ -177,7 +191,7 @@ class Logger:
         """
         @wraps(func)
         def wrapper(*args, **kwargs):
-            with ContextLogger(self, func) as log_scope:
+            with ContextLogger(self, func):
                 try:
                     result = func(*args, **kwargs)
                     return result
@@ -185,7 +199,3 @@ class Logger:
                     self.error(f"Exception in {func.__name__}: {str(e)}")
                     raise
         return wrapper
-
-
-
-

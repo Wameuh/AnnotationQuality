@@ -8,13 +8,13 @@ sys.path.append(root_dir)
 
 def pytest_configure(config):
     """Initial pytest configuration"""
-    # You can add global pytest configurations here
-    pass
+    config.option.cov_config = '.coveragerc'
+    config.option.cov_branch = True
 
-# Define test suites with full paths from root
+# Define test suites
 test_suites = {
-    'logger': ['Tests/UnitTests/test_logger.py'],  # Full path from root
-    'all': ['Tests/UnitTests/test_logger.py']  # Add other test files here when available
+    'logger': [os.path.join('Tests', 'UnitTests', 'test_logger.py')],
+    'all': [os.path.join('Tests', 'UnitTests', 'test_logger.py')]
 }
 
 def pytest_addoption(parser):
@@ -33,27 +33,3 @@ def test_suite(request):
     if suite_name not in test_suites:
         raise ValueError(f"Unknown test suite: {suite_name}")
     return test_suites[suite_name]
-
-def pytest_collection_modifyitems(session, config, items):
-    """Modify test collection based on selected suite"""
-    suite_name = config.getoption("--suite")
-    if suite_name == "all":
-        return  # Run all tests
-    
-    selected_tests = test_suites[suite_name]
-    selected_items = []
-    deselected_items = []
-    
-    for item in items:
-        # Get relative path from project root
-        file_path = os.path.relpath(str(item.fspath), root_dir)
-        file_path = file_path.replace('\\', '/')  # Normalize paths for Windows
-        
-        if any(test.replace('\\', '/') in file_path for test in selected_tests):
-            selected_items.append(item)
-        else:
-            deselected_items.append(item)
-    
-    items[:] = selected_items
-    if deselected_items:
-        config.hook.pytest_deselected(items=deselected_items) 

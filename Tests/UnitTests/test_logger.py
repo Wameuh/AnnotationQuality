@@ -55,7 +55,7 @@ def test_invalid_log_level():
         Logger(level="INVALID")
 
 def test_context_logger(logger, string_io):
-    @logger.logScope
+    @logger.log_scope
     def test_function():
         logger.info("Inside function")
     
@@ -67,7 +67,7 @@ def test_context_logger(logger, string_io):
     assert "-- test_function() --" in output
 
 def test_context_logger_with_exception(logger, string_io):
-    @logger.logScope
+    @logger.log_scope
     def failing_function():
         raise ValueError("Test error")
     
@@ -92,3 +92,30 @@ def test_write_error_handling(capsys):
     
     captured = capsys.readouterr()
     assert "Logger error: Failed to write message" in captured.err 
+
+def test_context_logger_enter_exception():
+    """Test ContextLogger when __enter__ raises an exception"""
+    class BrokenLogger:
+        level = LogLevel.DEBUG
+        def debug(self, _):
+            raise Exception("Debug error")
+        def warning(self, _):
+            pass
+
+    context = ContextLogger(BrokenLogger(), lambda: None)
+    context.__enter__()  # Should catch exception and continue
+
+def test_logger_attribute_error():
+    """Test Logger when output has no write attribute"""
+    class NoWriteOutput:
+        def flush(self):
+            pass
+
+    logger = Logger(output=NoWriteOutput())
+    logger.error("Test message")  # Should handle AttributeError
+
+def test_set_level_invalid():
+    """Test setting an invalid log level"""
+    logger = Logger()
+    with pytest.raises(ValueError, match="Level must be a valid LogLevel enum value"):
+        logger.set_level("INVALID") 

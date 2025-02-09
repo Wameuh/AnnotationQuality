@@ -7,12 +7,15 @@ import os
 import io
 from enum import Enum
 from functools import wraps
+
+
 class LogLevel(Enum):
     """Enumeration of available log levels."""
-    DEBUG = 0  # Most verbose
+    DEBUG = 0    # Most verbose
     INFO = 1
     WARNING = 2
-    ERROR = 3  # Least verbose
+    ERROR = 3    # Least verbose
+
 
 class ContextLogger:
     """
@@ -20,33 +23,48 @@ class ContextLogger:
     This class automatically logs when a function is entered (at creation)
     and exited (at destruction), including file name, line number, and thread information.
     """
-
     def __init__(self, logger: 'Logger', func):
         """
         Initialize the context logger and log the function entry.
 
         Args:
             logger (Logger): The logger instance to use for logging.
+            func: The function being logged.
         """
         self.logger = logger
         self.function_name = func.__name__
         self.function_file = os.path.basename(func.__code__.co_filename)
         self.function_line = func.__code__.co_firstlineno
+
+    def __enter__(self):
         try:
             if self.logger.level.value <= LogLevel.DEBUG.value:
-                entry_message = (f"File: {self.function_file} | "
-                            f"Line: {self.function_line} | "
-                            f"++ {self.function_name}() ++")
+                entry_message = (
+                    f"File: {self.function_file} | "
+                    f"Line: {self.function_line} | "
+                    f"++ {self.function_name}() ++"
+                )
                 self.logger.debug(entry_message)
+            return self
         except Exception as e:
             self.logger.warning(f"Failed to initialize logging context: {str(e)}")
 
-
-    def __del__(self):
-        """Log function exit when the object is destroyed."""
-        if hasattr(self, 'logger') and hasattr(self, 'function_name'):  # Check if initialization was successful
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Log function exit when the context is exited.
+        
+        Args:
+            exc_type: The type of the exception that occurred, if any
+            exc_value: The instance of the exception that occurred, if any
+            traceback: The traceback of the exception that occurred, if any
+        """
+        if hasattr(self, 'logger') and hasattr(self, 'function_name'):
             if self.logger.level.value <= LogLevel.DEBUG.value:
-                exit_message = f"File: {self.function_file} | Line: {self.function_line} | -- {self.function_name}() --"
+                exit_message = (
+                    f"File: {self.function_file} | "
+                    f"Line: {self.function_line} | "
+                    f"-- {self.function_name}() --"
+                )
                 self.logger.debug(exit_message)
 
 
@@ -56,7 +74,6 @@ class Logger:
     with optional verbosity control and function call tracing.
     Supports context-based logging for function entry/exit points.
     """
-
     def __init__(self, level: LogLevel = LogLevel.DEBUG, output: TextIO = sys.stdout):
         """
         Initialize the Logger.
@@ -76,17 +93,14 @@ class Logger:
     def __write__(self, message: str) -> None:
         """Write a message to the output stream."""
         try:
-            if isinstance(self.output, io.TextIOBase):
-                self.output.write(message)
-                self.output.flush()
-            elif hasattr(self.output, 'write'):
-                # Support any object with a write method
-                self.output.write(message)
-                if hasattr(self.output, 'flush'):
-                    self.output.flush()
+            self.output.write(message)
+            self.output.flush()
+        except AttributeError as e:
+            sys.stderr.write("Logger error: Output is not writable\n")
+            sys.stderr.write(f"Logger error: Failed to write message: message {message}, error {str(e)}\n")
+            sys.stderr.flush()
         except Exception as e:
-            # Fallback to stderr in case of writing errors
-            sys.stderr.write(f"Logger error: Failed to write message: {str(e)}\n")
+            sys.stderr.write(f"Logger error: Failed to write message: message {message}, error {str(e)}\n")
             sys.stderr.flush()
 
     def _format_message(self, level: LogLevel, message: str) -> str:
@@ -146,7 +160,7 @@ class Logger:
             raise ValueError("Level must be a valid LogLevel enum value")
         self.level = level
 
-    def logScope(self, func):
+    def log_scope(self, func):
         """
         Decorator for logging function entry and exit.
         
@@ -157,27 +171,19 @@ class Logger:
             The wrapped function with logging
         
         Usage:
-            @logger.logScope
+            @logger.log_scope
             def my_function():
                 # Function code here
         """
-
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # Create a context logger   
-            logscope = ContextLogger(self, func)
-            try:
-                # Execute the function
-                result = func(*args, **kwargs)
-
-                return result
-            except Exception as e:
-                # Log any exception that occurs
-                self.error(f"Exception in {func.__name__}: {str(e)}")
-                raise
-            finally:
-                # Context logger will be destroyed here, logging the exit
-                del logscope
+            with ContextLogger(self, func) as log_scope:
+                try:
+                    result = func(*args, **kwargs)
+                    return result
+                except Exception as e:
+                    self.error(f"Exception in {func.__name__}: {str(e)}")
+                    raise
         return wrapper
 
 

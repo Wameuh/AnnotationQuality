@@ -10,8 +10,7 @@ sys.path.append(root_dir)
 
 def pytest_configure(config):
     """Initial pytest configuration"""
-    config.option.cov_config = '.coveragerc'
-    config.option.cov_branch = True
+    pass
 
 
 # Define test suites

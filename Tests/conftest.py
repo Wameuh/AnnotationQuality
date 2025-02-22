@@ -9,10 +9,10 @@ sys.path.append(root_dir)
 # Now we can import from Utils
 from Utils.logger import Logger, LogLevel
 
-
 def pytest_configure(config):
     """Initial pytest configuration"""
     pass
+
 
 
 # Define test suites

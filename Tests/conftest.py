@@ -2,10 +2,12 @@ import os
 import sys
 import pytest
 
-
-# Add root directory to PYTHONPATH
+# Add root directory to PYTHONPATH before imports
 root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root_dir)
+
+# Now we can import from Utils
+from Utils.logger import Logger, LogLevel
 
 
 def pytest_configure(config):
@@ -16,7 +18,11 @@ def pytest_configure(config):
 # Define test suites
 test_suites = {
     'logger': [os.path.join('Tests', 'UnitTests', 'test_logger.py')],
-    'all': [os.path.join('Tests', 'UnitTests', 'test_logger.py')]
+    'data_loader': [os.path.join('Tests', 'UnitTests', 'test_data_loader.py')],
+    'all': [
+        os.path.join('Tests', 'UnitTests', 'test_logger.py'),
+        os.path.join('Tests', 'UnitTests', 'test_data_loader.py')
+    ]
 }
 
 
@@ -37,3 +43,10 @@ def test_suite(request):
     if suite_name not in test_suites:
         raise ValueError(f"Unknown test suite: {suite_name}")
     return test_suites[suite_name]
+
+
+# Common fixtures that can be used across test files
+@pytest.fixture
+def logger():
+    """Fixture providing a logger instance."""
+    return Logger(level=LogLevel.DEBUG)

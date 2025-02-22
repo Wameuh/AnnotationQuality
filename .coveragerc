@@ -1,6 +1,8 @@
 [run]
-source = Utils
-omit = 
+source =
+    Utils
+    dataPreparation.py
+omit =
     */site-packages/*
     */tests/*
     */__init__.py
@@ -15,4 +17,4 @@ exclude_lines =
     raise ImportError
 
 [html]
-directory = coverage_html 
+directory = coverage_html

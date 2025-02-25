@@ -19,9 +19,13 @@ def pytest_configure(config):
 test_suites = {
     'logger': [os.path.join('Tests', 'UnitTests', 'test_logger.py')],
     'data_loader': [os.path.join('Tests', 'UnitTests', 'test_data_loader.py')],
+    'features': [
+        os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py')
+    ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
-        os.path.join('Tests', 'UnitTests', 'test_data_loader.py')
+        os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py')
     ]
 }
 

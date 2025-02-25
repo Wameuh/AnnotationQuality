@@ -5,6 +5,7 @@ source =
 omit =
     */site-packages/*
     */tests/*
+    */Tests/*
     */__init__.py
 
 [report]

@@ -1,12 +1,5 @@
 import os
-import sys
 import pytest
-
-# Add root directory to PYTHONPATH before imports
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(root_dir)
-
-# Now we can import from Utils
 from Utils.logger import Logger, LogLevel
 
 

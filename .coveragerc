@@ -1,7 +1,7 @@
 [run]
 source =
+    src
     Utils
-    dataPreparation.py
 omit =
     */site-packages/*
     */tests/*
@@ -16,6 +16,7 @@ exclude_lines =
     if __name__ == .__main__.:
     pass
     raise ImportError
+    except ImportError:
 
 [html]
 directory = coverage_html

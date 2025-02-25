@@ -127,11 +127,14 @@ class DataLoader:
         required = ['review_id', 'AnnotatorName', 'Score']
         return all(col in columns for col in required)
 
-
     def _process_wide_format(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process DataFrame in wide format."""
+        # Créer une copie explicite du DataFrame
+        df = df.copy()
+
         # Remove rows with empty or NaN review_ids
         df = df.dropna(subset=['review_id'])
+
         # Convert review_id to string and clean
         df['review_id'] = df['review_id'].astype(str)
         df = df[df['review_id'].str.strip() != '']
@@ -148,6 +151,9 @@ class DataLoader:
 
     def _process_standard_format(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process DataFrame in standard format."""
+        # Créer une copie explicite du DataFrame
+        df = df.copy()
+
         # Remove rows with empty or NaN review_ids
         df = df.dropna(subset=['review_id'])
         # Convert review_id to string and clean

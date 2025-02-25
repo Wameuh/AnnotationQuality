@@ -1,7 +1,7 @@
 import pytest
 import os
 import pandas as pd
-from dataPreparation import DataLoader
+from src.dataPreparation import DataLoader
 from Utils.logger import Logger, LogLevel
 
 

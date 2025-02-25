@@ -1,6 +1,7 @@
 import pytest
 import tempfile
 import os
+import pandas as pd
 from dataPreparation import DataLoader
 from Utils.logger import Logger, LogLevel
 
@@ -79,32 +80,39 @@ def test_logger_setter_validation_without_raise_error(logger):
 
 def test_load_standard_format(data_loader, temp_csv_standard):
     """Test loading data in standard format."""
-    data = data_loader.load_data(temp_csv_standard)
+    df = data_loader.load_data(temp_csv_standard)
 
-    assert 'rev1' in data
-    assert 'rev2' in data
-    assert len(data['rev1']) == 2
-    assert len(data['rev2']) == 2
+    # Check DataFrame structure
+    assert isinstance(df, pd.DataFrame)
+    assert df.index.name == 'review_id'
+    assert len(df.index.unique()) == 2  # Two unique review_ids
 
-    # Check first review annotations
-    annotations = data['rev1']
-    assert any(a['name'] == 'Alice' and a['score'] == 1 for a in annotations)
-    assert any(a['name'] == 'Bob' and a['score'] == 2 for a in annotations)
+    # Check data content
+    assert 'Alice' in df.columns
+    assert 'Bob' in df.columns
+    assert df.loc['rev1', 'Alice'] == 1
+    assert df.loc['rev1', 'Bob'] == 2
+    assert df.loc['rev2', 'Alice'] == 2
+    assert df.loc['rev2', 'Bob'] == 2
 
 
 def test_load_wide_format(data_loader, temp_csv_wide):
     """Test loading data in wide format."""
-    data = data_loader.load_data(temp_csv_wide)
+    df = data_loader.load_data(temp_csv_wide)
 
-    assert 'rev1' in data
-    assert 'rev2' in data
+    # Check DataFrame structure
+    assert isinstance(df, pd.DataFrame)
+    assert df.index.name == 'review_id'
+    assert len(df.index.unique()) == 2
 
-    # Check first review
-    rev1 = data['rev1']
-    assert rev1['Annotator1']['name'] == 'Alice'
-    assert rev1['Annotator1']['score'] == 1
-    assert rev1['Annotator2']['name'] == 'Bob'
-    assert rev1['Annotator2']['score'] == 2
+    # Check data content
+    score_cols = [col for col in df.columns if col.endswith('_score')]
+    name_cols = [col for col in df.columns if col.endswith('_name')]
+
+    assert len(score_cols) == 2
+    assert len(name_cols) == 2
+    assert df.loc['rev1', 'Annotator1_score'] == 1
+    assert df.loc['rev1', 'Annotator2_score'] == 2
 
 
 def test_load_missing_file(data_loader):
@@ -169,14 +177,9 @@ def test_handle_missing_data_standard(data_loader):
                                      suffix='.csv') as f:
         f.write(data)
 
-    result = data_loader.load_data(f.name)
-    assert len(result['rev1']) == 2
-    assert result['rev1'][0]['name'] == 'Alice'
-    assert result['rev1'][0]['score'] == 1
-    assert result['rev1'][1]['name'] == ''
-    assert result['rev1'][1]['score'] == 2
-    assert result['rev2'][0]['name'] == 'Bob'
-    assert result['rev2'][0]['score'] is None
+    df = data_loader.load_data(f.name)
+    assert pd.isna(df.loc['rev2', 'Bob'])
+    assert df.loc['rev1', 'Alice'] == 1
 
     os.unlink(f.name)
 
@@ -193,14 +196,10 @@ def test_handle_missing_data_wide(data_loader):
                                      suffix='.csv') as f:
         f.write(data)
 
-    result = data_loader.load_data(f.name)
-    assert result['rev1']['Annotator1']['name'] == 'Alice'
-    assert result['rev1']['Annotator1']['score'] is None
-    assert result['rev1']['Annotator2']['name'] == 'Bob'
-    assert result['rev1']['Annotator2']['score'] == 2
-    assert result['rev2']['Annotator1']['score'] == 1
-    assert result['rev2']['Annotator2']['name'] == 'Bob'
-    assert result['rev2']['Annotator2']['score'] is None
+    df = data_loader.load_data(f.name)
+    assert pd.isna(df.loc['rev1', 'Annotator1_score'])
+    assert df.loc['rev1', 'Annotator2_score'] == 2
+    assert pd.isna(df.loc['rev2', 'Annotator2_score'])
 
     os.unlink(f.name)
 
@@ -275,18 +274,16 @@ def test_standard_format_missing_columns(data_loader):
 def test_handle_invalid_score_values(data_loader):
     """Test handling of invalid score values."""
     data = ("review_id,AnnotatorName,Score\n" +
-            "rev1,Alice,invalid\n" +
-            "rev2,Bob,2.5")
+            "rev1,Alice,invalid\n" +  # Non-numeric -> should be NaN
+            "rev2,Bob,2.5")          # Float -> should be accepted
     with tempfile.NamedTemporaryFile(mode='w',
                                      delete=False,
                                      suffix='.csv') as f:
         f.write(data)
 
-    result = data_loader.load_data(f.name)
-    assert result['rev1'][0]['name'] == 'Alice'
-    assert result['rev1'][0]['score'] is None
-    assert result['rev2'][0]['name'] == 'Bob'
-    assert result['rev2'][0]['score'] is None
+    df = data_loader.load_data(f.name)
+    assert pd.isna(df.loc['rev1', 'Alice'])  # Invalid score -> NaN
+    assert df.loc['rev2', 'Bob'] == 2.5      # Float score -> kept as is
 
     os.unlink(f.name)
 
@@ -335,9 +332,78 @@ def test_standard_format_exact_columns(data_loader):
         f.write(data)
 
     # Should work regardless of column order
-    result = data_loader.load_data(f.name)
-    assert 'rev1' in result
-    assert result['rev1'][0]['name'] == 'Alice'
-    assert result['rev1'][0]['score'] == 1
+    df = data_loader.load_data(f.name)
+
+    # Check DataFrame structure
+    assert isinstance(df, pd.DataFrame)
+    assert df.index.name == 'review_id'
+    assert 'rev1' in df.index
+    assert 'Alice' in df.columns
+    assert df.loc['rev1', 'Alice'] == 1
+
+    os.unlink(f.name)
+
+
+def test_partial_annotations_standard(data_loader):
+    """Test handling reviews with missing annotators in standard format."""
+    data = ("review_id,AnnotatorName,Score\n" +
+            "rev1,Alice,1\n" +
+            "rev1,Bob,2\n" +
+            "rev1,Charlie,3\n" +  # rev1 has 3 annotators
+            "rev2,Alice,2\n" +
+            "rev2,Bob,2\n" +
+            "rev2,Charlie,3\n" +
+            "rev2,Dave,4")        # rev2 has all 4 annotators
+    with tempfile.NamedTemporaryFile(mode='w',
+                                     delete=False,
+                                     suffix='.csv') as f:
+        f.write(data)
+
+    df = data_loader.load_data(f.name)
+
+    # Check all annotators are columns
+    names = ['Alice', 'Bob', 'Charlie', 'Dave']
+    assert all(name in df.columns for name in names)
+
+    # Check rev1 has NaN for Dave
+    assert pd.isna(df.loc['rev1', 'Dave'])
+
+    # Check other scores are present
+    assert df.loc['rev1', 'Alice'] == 1
+    assert df.loc['rev1', 'Bob'] == 2
+    assert df.loc['rev1', 'Charlie'] == 3
+
+    # Check rev2 has all scores
+    assert not pd.isna(df.loc['rev2', 'Dave'])
+
+    os.unlink(f.name)
+
+
+def test_partial_annotations_wide(data_loader):
+    """Test handling reviews with missing annotators in wide format."""
+    data = ("review_id,Annotator1_name,Annotator1_score," +
+            "Annotator2_name,Annotator2_score," +
+            "Annotator3_name,Annotator3_score\n" +
+            "rev1,Alice,1,Bob,2,Charlie,3\n" +  # Only 3 annotators
+            "rev2,Alice,2,Bob,2,Charlie,3")     # Only 3 annotators
+
+    with tempfile.NamedTemporaryFile(mode='w',
+                                     delete=False,
+                                     suffix='.csv') as f:
+        f.write(data)
+
+    df = data_loader.load_data(f.name)
+
+    # Check we have all expected columns
+    score_cols = [col for col in df.columns if col.endswith('_score')]
+    name_cols = [col for col in df.columns if col.endswith('_name')]
+
+    assert len(score_cols) == 3  # Only 3 score columns
+    assert len(name_cols) == 3   # Only 3 name columns
+
+    # Check scores are present
+    assert df.loc['rev1', 'Annotator1_score'] == 1
+    assert df.loc['rev1', 'Annotator2_score'] == 2
+    assert df.loc['rev1', 'Annotator3_score'] == 3
 
     os.unlink(f.name)

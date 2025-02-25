@@ -42,7 +42,6 @@ class DataLoader:
 
         Returns:
             pd.DataFrame: A DataFrame containing the annotation data.
-
         Raises:
             ValueError: If the CSV format is not supported.
         """
@@ -127,6 +126,7 @@ class DataLoader:
         """Check if DataFrame columns match the standard format."""
         required = ['review_id', 'AnnotatorName', 'Score']
         return all(col in columns for col in required)
+
 
     def _process_wide_format(self, df: pd.DataFrame) -> pd.DataFrame:
         """Process DataFrame in wide format."""

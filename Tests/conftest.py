@@ -1,6 +1,9 @@
 import os
 import pytest
 from Utils.logger import Logger, LogLevel
+from src.dataPreparation import DataLoader
+from src.raw_agreement import RawAgreement
+from Utils.confident_interval import ConfidenceIntervalCalculator
 
 
 def pytest_configure(config):
@@ -47,3 +50,21 @@ def test_suite(request):
 def logger():
     """Fixture providing a logger instance."""
     return Logger(level=LogLevel.DEBUG)
+
+
+@pytest.fixture
+def data_loader(logger):
+    """Fixture providing a DataLoader instance."""
+    return DataLoader(logger)
+
+
+@pytest.fixture
+def agreement_calc(logger):
+    """Fixture providing a RawAgreement instance."""
+    return RawAgreement(logger)
+
+
+@pytest.fixture
+def ci_calc():
+    """Fixture providing a ConfidenceIntervalCalculator instance."""
+    return ConfidenceIntervalCalculator(confidence=0.95)

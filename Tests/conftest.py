@@ -3,6 +3,7 @@ import pytest
 from Utils.logger import Logger, LogLevel
 from src.dataPreparation import DataLoader
 from src.raw_agreement import RawAgreement
+from src.cohen_kappa import CohenKappa
 from Utils.confident_interval import ConfidenceIntervalCalculator
 
 
@@ -15,21 +16,31 @@ def pytest_configure(config):
 test_suites = {
     'logger': [os.path.join('Tests', 'UnitTests', 'test_logger.py')],
     'data_loader': [os.path.join('Tests', 'UnitTests', 'test_data_loader.py')],
-    'raw_agreement': [os.path.join('Tests',
-                                   'UnitTests',
-                                   'test_raw_agreement.py')],
-    'pretty_print': [os.path.join('Tests',
-                                  'UnitTests',
-                                  'test_pretty_print.py')],
+    'raw_agreement': [
+        os.path.join('Tests', 'UnitTests', 'test_raw_agreement.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py')
+    ],
+    'cohen_kappa': [
+        os.path.join('Tests', 'UnitTests', 'test_cohen_kappa.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py')
+    ],
+    'pretty_print': [os.path.join('Tests', 'UnitTests', 'test_pretty_print.py')],
+    'confidence_interval': [os.path.join('Tests', 'UnitTests', 'test_confidence_interval.py')],
     'features': [
-        os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py')
+        os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py')
     ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
         os.path.join('Tests', 'UnitTests', 'test_raw_agreement.py'),
+        os.path.join('Tests', 'UnitTests', 'test_cohen_kappa.py'),
+        os.path.join('Tests', 'UnitTests', 'test_confidence_interval.py'),
         os.path.join('Tests', 'UnitTests', 'test_pretty_print.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py')
+        os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py')
     ]
 }
 
@@ -70,6 +81,12 @@ def data_loader(logger):
 def agreement_calc(logger):
     """Fixture providing a RawAgreement instance."""
     return RawAgreement(logger)
+
+
+@pytest.fixture
+def kappa_calc(logger):
+    """Fixture providing a CohenKappa instance."""
+    return CohenKappa(logger)
 
 
 @pytest.fixture

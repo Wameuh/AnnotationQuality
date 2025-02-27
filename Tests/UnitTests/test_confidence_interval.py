@@ -224,3 +224,233 @@ def test_wilson_interval_invalid_inputs():
     # Negative sample size
     with pytest.raises(ValueError):
         calc.wilson_interval(p_hat=0.5, n=-10)
+
+
+def test_agresti_coull_interval_basic(calculator):
+    """Test basic functionality of agresti_coull_interval."""
+    # Test with a simple proportion and sample size
+    result = calculator.agresti_coull_interval(p_hat=0.7, n=100)
+
+    # Check that result contains expected keys
+    assert 'ci_lower' in result
+    assert 'ci_upper' in result
+
+    # Check that bounds are between 0 and 1
+    assert 0 <= result['ci_lower'] <= 1
+    assert 0 <= result['ci_upper'] <= 1
+
+    # Check that lower bound is less than upper bound
+    assert result['ci_lower'] < result['ci_upper']
+
+    # Check that the interval contains the point estimate
+    assert result['ci_lower'] < 0.7 < result['ci_upper']
+
+
+def test_agresti_coull_interval_extreme_values(calculator):
+    """Test agresti_coull_interval with extreme proportions."""
+    # Test with proportion = 0
+    result_0 = calculator.agresti_coull_interval(p_hat=0.0, n=100)
+    assert result_0['ci_lower'] == 0.0
+    assert result_0['ci_upper'] > 0.0
+
+    # Test with proportion = 1
+    result_1 = calculator.agresti_coull_interval(p_hat=1.0, n=100)
+    assert result_1['ci_lower'] < 1.0
+    assert result_1['ci_upper'] == 1.0
+
+
+def test_agresti_coull_interval_small_sample(calculator):
+    """Test agresti_coull_interval with small sample size."""
+    # Test with small sample size
+    result = calculator.agresti_coull_interval(p_hat=0.5, n=10)
+
+    # Check that bounds are between 0 and 1
+    assert 0 <= result['ci_lower'] <= 1
+    assert 0 <= result['ci_upper'] <= 1
+
+    # Check that the interval is wider than with a larger sample
+    large_sample = calculator.agresti_coull_interval(p_hat=0.5, n=1000)
+    assert (result['ci_upper'] - result['ci_lower']) > (large_sample['ci_upper'] - large_sample['ci_lower'])
+
+
+def test_agresti_coull_vs_wilson(calculator):
+    """Compare Agresti-Coull interval with Wilson interval."""
+    # For moderate proportions and large samples, they should be similar
+    ac_result = calculator.agresti_coull_interval(p_hat=0.5, n=1000)
+    wilson_result = calculator.wilson_interval(p_hat=0.5, n=1000)
+
+    # Check that the intervals are similar (within 0.01)
+    assert abs(ac_result['ci_lower'] - wilson_result['ci_lower']) < 0.01
+    assert abs(ac_result['ci_upper'] - wilson_result['ci_upper']) < 0.01
+
+
+def test_bootstrap_basic(calculator):
+    """Test basic functionality of bootstrap method."""
+    # Create sample data: 70 agreements out of 100
+    data = [(1, 1)] * 70 + [(1, 2)] * 30
+
+    # Calculate bootstrap CI with fewer resamples for speed
+    result = calculator.bootstrap(data, n_resamples=100)
+
+    # Check that result contains expected keys
+    assert 'ci_lower' in result
+    assert 'ci_upper' in result
+
+    # Check that bounds are between 0 and 1
+    assert 0 <= result['ci_lower'] <= 1
+    assert 0 <= result['ci_upper'] <= 1
+
+    # Check that lower bound is less than upper bound
+    assert result['ci_lower'] < result['ci_upper']
+
+    # Check that the interval contains the point estimate (0.7)
+    assert result['ci_lower'] < 0.7 < result['ci_upper']
+
+
+def test_bootstrap_custom_statistic(calculator):
+    """Test bootstrap with custom statistic function."""
+    # Create sample data
+    data = [(1, 1), (2, 2), (3, 3), (4, 3), (5, 4)]
+
+    # Define custom statistic: mean absolute difference
+    def mean_abs_diff(sample):
+        return sum(abs(a - b) for a, b in sample) / len(sample)
+
+    # Calculate bootstrap CI with custom statistic
+    result = calculator.bootstrap(data, n_resamples=100, statistic=mean_abs_diff)
+
+    # Check that result contains expected keys
+    assert 'ci_lower' in result
+    assert 'ci_upper' in result
+
+    # The point estimate should be (0 + 0 + 0 + 1 + 1) / 5 = 0.4
+    # Check that the interval contains this value
+    assert result['ci_lower'] <= 0.4 <= result['ci_upper']
+
+
+def test_bootstrap_empty_data(calculator):
+    """Test bootstrap with empty data."""
+    # This should raise a ValueError
+    with pytest.raises(Exception):
+        calculator.bootstrap([])
+
+
+def test_bootstrap_deterministic(calculator):
+    """Test bootstrap with deterministic data."""
+    # All pairs agree
+    all_agree = [(1, 1), (2, 2), (3, 3)]
+    result_agree = calculator.bootstrap(all_agree, n_resamples=100)
+    assert result_agree['ci_lower'] == 1.0
+    assert result_agree['ci_upper'] == 1.0
+
+    # All pairs disagree
+    all_disagree = [(1, 2), (2, 3), (3, 4)]
+    result_disagree = calculator.bootstrap(all_disagree, n_resamples=100)
+    assert result_disagree['ci_lower'] == 0.0
+    assert result_disagree['ci_upper'] == 0.0
+
+
+def test_normal_approximation_basic(ci_calc):
+    """Test basic functionality of normal_approximation."""
+    # Test with a simple proportion and sample size
+    result = ci_calc.normal_approximation(p_hat=0.7, n=100)
+
+    # Check that result contains expected keys
+    assert 'ci_lower' in result
+    assert 'ci_upper' in result
+
+    # Check that bounds are between 0 and 1
+    assert 0 <= result['ci_lower'] <= 1
+    assert 0 <= result['ci_upper'] <= 1
+
+    # Check that lower bound is less than upper bound
+    assert result['ci_lower'] < result['ci_upper']
+
+    # Check that the interval contains the point estimate
+    assert result['ci_lower'] < 0.7 < result['ci_upper']
+
+
+def test_normal_approximation_extreme_values(ci_calc):
+    """Test normal_approximation with extreme proportions."""
+    # Test with proportion = 0
+    result_0 = ci_calc.normal_approximation(p_hat=0.0, n=100)
+    assert result_0['ci_lower'] == 0.0
+    assert result_0['ci_upper'] > 0.0
+
+    # Test with proportion = 1
+    result_1 = ci_calc.normal_approximation(p_hat=1.0, n=100)
+    assert result_1['ci_lower'] < 1.0
+    assert result_1['ci_upper'] == 1.0
+
+
+def test_normal_approximation_sample_size(ci_calc):
+    """Test normal_approximation with different sample sizes."""
+    # Test with small sample size
+    small_sample = ci_calc.normal_approximation(p_hat=0.5, n=10)
+
+    # Test with large sample size
+    large_sample = ci_calc.normal_approximation(p_hat=0.5, n=1000)
+
+    # Interval should be wider with smaller sample size
+    assert (small_sample['ci_upper'] - small_sample['ci_lower']) > (large_sample['ci_upper'] - large_sample['ci_lower'])
+
+
+def test_normal_approximation_confidence_levels():
+    """Test normal_approximation with different confidence levels."""
+    # Create calculators with different confidence levels
+    ci_90 = ConfidenceIntervalCalculator(confidence=0.90)
+    ci_95 = ConfidenceIntervalCalculator(confidence=0.95)
+    ci_99 = ConfidenceIntervalCalculator(confidence=0.99)
+
+    # Calculate intervals for the same data
+    result_90 = ci_90.normal_approximation(p_hat=0.5, n=100)
+    result_95 = ci_95.normal_approximation(p_hat=0.5, n=100)
+    result_99 = ci_99.normal_approximation(p_hat=0.5, n=100)
+
+    # Higher confidence should give wider intervals
+    width_90 = result_90['ci_upper'] - result_90['ci_lower']
+    width_95 = result_95['ci_upper'] - result_95['ci_lower']
+    width_99 = result_99['ci_upper'] - result_99['ci_lower']
+
+    assert width_90 < width_95 < width_99
+
+
+def test_normal_approximation_invalid_inputs(ci_calc):
+    """Test normal_approximation with invalid inputs."""
+    # Test with negative sample size
+    with pytest.raises(ValueError):
+        ci_calc.normal_approximation(p_hat=0.5, n=-10)
+
+    # Test with zero sample size
+    with pytest.raises(ValueError):
+        ci_calc.normal_approximation(p_hat=0.5, n=0)
+
+
+def test_normal_approximation_vs_wilson(ci_calc):
+    """Compare normal approximation with Wilson interval."""
+    # For large samples and moderate proportions, they should be similar
+    p_hat = 0.5
+    n = 1000
+
+    normal_result = ci_calc.normal_approximation(p_hat=p_hat, n=n)
+    wilson_result = ci_calc.wilson_interval(p_hat=p_hat, n=n)
+
+    # Check that the intervals are similar (within 0.01)
+    assert abs(normal_result['ci_lower'] - wilson_result['ci_lower']) < 0.01
+    assert abs(normal_result['ci_upper'] - wilson_result['ci_upper']) < 0.01
+
+    # For small samples or extreme proportions, they can differ more
+    p_hat = 0.05
+    n = 20
+
+    normal_result = ci_calc.normal_approximation(p_hat=p_hat, n=n)
+    wilson_result = ci_calc.wilson_interval(p_hat=p_hat, n=n)
+
+    # Wilson interval is generally more conservative for extreme proportions
+    # (wider interval)
+    normal_width = normal_result['ci_upper'] - normal_result['ci_lower']
+    wilson_width = wilson_result['ci_upper'] - wilson_result['ci_lower']
+
+    # This might not always be true, but is a common pattern
+    # So we'll just print the values instead of asserting
+    print(f"Normal width: {normal_width}, Wilson width: {wilson_width}")

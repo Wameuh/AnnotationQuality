@@ -15,8 +15,12 @@ def pytest_configure(config):
 test_suites = {
     'logger': [os.path.join('Tests', 'UnitTests', 'test_logger.py')],
     'data_loader': [os.path.join('Tests', 'UnitTests', 'test_data_loader.py')],
-    'raw_agreement': [os.path.join('Tests', 'UnitTests', 'test_raw_agreement.py')],
-    'pretty_print': [os.path.join('Tests', 'UnitTests', 'test_pretty_print.py')],
+    'raw_agreement': [os.path.join('Tests',
+                                   'UnitTests',
+                                   'test_raw_agreement.py')],
+    'pretty_print': [os.path.join('Tests',
+                                  'UnitTests',
+                                  'test_pretty_print.py')],
     'features': [
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py')
     ],

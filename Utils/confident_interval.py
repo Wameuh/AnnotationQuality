@@ -214,3 +214,44 @@ class ConfidenceIntervalCalculator:
             'ci_lower': ci_lower,
             'ci_upper': ci_upper
         }
+
+    def normal_approximation(self, p_hat: float, n: int) -> dict[str, float]:
+        """
+        Calculate confidence interval using normal approximation.
+
+        Args:
+            p_hat (float): Estimated proportion (agreement value).
+            n (int): Sample size.
+
+        Returns:
+            dict[str, float]: Dictionary with lower and upper bounds.
+        """
+        # Check inputs
+        if n <= 0:
+            raise ValueError(f"Sample size must be positive, got {n}")
+
+        # For extreme values (0 or 1), use a continuity correction
+        # or return a one-sided interval
+        if p_hat == 0.0:
+            # Use 1/(2n) as a continuity correction
+            p_hat_adj = 1.0 / (2 * n)
+            se = np.sqrt(p_hat_adj * (1 - p_hat_adj) / n)
+            ci_lower = 0.0
+            ci_upper = min(1.0, p_hat + self.z_value * se)
+        elif p_hat == 1.0:
+            # Use 1/(2n) as a continuity correction
+            p_hat_adj = 1.0 - 1.0 / (2 * n)
+            se = np.sqrt(p_hat_adj * (1 - p_hat_adj) / n)
+            ci_lower = max(0.0, p_hat - self.z_value * se)
+            ci_upper = 1.0
+        else:
+            # Standard normal approximation
+            se = np.sqrt(p_hat * (1 - p_hat) / n)
+            z = self.z_value
+            ci_lower = max(0.0, p_hat - z * se)
+            ci_upper = min(1.0, p_hat + z * se)
+
+        return {
+            'ci_lower': ci_lower,
+            'ci_upper': ci_upper
+        }

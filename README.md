@@ -21,7 +21,7 @@ Different methods exist for calculating IAA:
 * **Fleiss' Kappa:** This coefficient is used to measure agreement between multiple annotators and is particularly suitable for classification evaluation [5].
 * **Krippendorff's Alpha (α):** Similar to Fleiss' Kappa but more flexible as it can take into account different levels of disagreement and is suitable for incomplete data or with a variable number of annotators [6]. The sources show a range of alpha scores based on different annotation tasks, with some scores showing substantial agreement [1].
 * **F-measure:** This measure calculates agreement using precision, recall, and their harmonic mean. It is particularly useful for tasks such as named entity recognition or classification, where the ability of a model to identify correct entities and its ability to identify all relevant entities must be balanced [].
-* **Boundary-Weighted Fleiss’ Kappa (BWFK):** This method is used to evaluate agreement in tissue segmentation, particularly on tissue boundaries. It reduces the impact of minor disagreements that often occur along these boundaries [].
+* **Boundary-Weighted Fleiss' Kappa (BWFK):** This method is used to evaluate agreement in tissue segmentation, particularly on tissue boundaries. It reduces the impact of minor disagreements that often occur along these boundaries [].
 * **Distance-Based Cell Agreement Algorithm (DBCAA):** An algorithm that measures agreement in cell detection without relying on ground truth [7].
 * **Intersection over Union (IoU)-Based Measures:** These measures are used for regional segmentation but are limited for assessments involving more than two observers [1].
 * **Analysis of Annotation Variance:** For a deeper understanding, an analysis of the variance in annotations can be performed to study how annotations change before and after the introduction of semantics, in order to better understand cases where agreement decreases despite the addition of semantic information [4, 8].
@@ -78,6 +78,63 @@ To calculate Cohen's Kappa on a CSV file named **annotations.csv** with annotato
 iaa-eval --input annotations.csv --format csv --annotator_col annotator_id --item_col item_id --metric cohen_kappa --output results --viz
 ```
 
+### Data Format
+
+The tool accepts CSV files with the following format:
+
+- Each row represents an annotated item (e.g., a review)
+- Columns should include scores from each annotator with the suffix `_score`
+- For example: `Annotator1_score`, `Annotator2_score`, etc.
+
+Example of accepted CSV format:
+
+```
+id,text,Annotator1_score,Annotator2_score,Annotator3_score
+1,"Text to annotate 1",5,4,5
+2,"Text to annotate 2",3,3,4
+3,"Text to annotate 3",1,2,1
+```
+
+Missing values are allowed and will be ignored when calculating agreement.
+
+### Core Modules
+
+#### raw_agreement.py
+
+This module calculates raw agreement between annotators. It provides the following functionalities:
+
+- `calculate_pairwise()`: Calculates pairwise agreement between all annotators
+- `calculate_overall()`: Calculates overall agreement across all annotators
+- `get_agreement_statistics()`: Provides agreement statistics (overall, average, min, max)
+
+Agreement is calculated as the proportion of items for which annotators gave the same score.
+
+#### dataPreparation.py
+
+This module handles loading and preprocessing annotation data.
+
+#### confident_interval.py
+
+This module calculates confidence intervals for agreement measures. Confidence intervals provide a range of values that likely contain the true agreement value, helping to assess the reliability of the calculated agreement.
+
+The module supports several methods for calculating confidence intervals:
+
+1. **Bootstrap Method**: This non-parametric approach generates multiple resampled datasets from the original data, calculates agreement for each sample, and determines the confidence interval from the distribution of these values. It's robust and doesn't require assumptions about the underlying distribution.
+
+2. **Normal Approximation**: This method assumes that the sampling distribution of agreement follows a normal distribution. It uses the standard error of the agreement measure to calculate confidence intervals. This approach is computationally efficient but assumes normality.
+
+3. **Wilson Score Interval**: Particularly useful for proportions (like agreement scores), this method provides better coverage than normal approximation, especially for extreme agreement values (near 0 or 1) or small sample sizes.
+
+4. **Agresti-Coull Interval**: An improved version of the Wilson Score method that adds "pseudo-observations" to the sample, resulting in intervals with better coverage properties.
+
+The choice of method depends on factors such as sample size, agreement values, and computational constraints:
+
+- For small samples or extreme agreement values, bootstrap or Wilson Score methods are recommended
+- For large samples with moderate agreement values, normal approximation is computationally efficient
+- When in doubt, the bootstrap method provides robust estimates without distributional assumptions
+
+The confidence level (typically 95%) indicates the probability that the true agreement value falls within the calculated interval.
+
 **Advanced Features**
 
 • **Semantic Information:** The application can potentially incorporate semantic information to analyze how it affects IAA, building on research which suggests that providing background semantics increases inter-annotator agreement [1-2].
@@ -92,7 +149,7 @@ iaa-eval --input annotations.csv --format csv --annotator_col annotator_id --ite
 
 [1] Artstein, R. (2017). Inter-annotator Agreement. In: Ide, N., Pustejovsky, J. (eds) Handbook of Linguistic Annotation. Springer, Dordrecht. https://doi.org/10.1007/978-94-024-0881-2_11
 
-[2] Vámos, Csilla et al. ‘Ontology of Active and Passive Environmental Exposure’. 1 Jan. 2024 : 1733 – 1761
+[2] Vámos, Csilla et al. 'Ontology of Active and Passive Environmental Exposure'. 1 Jan. 2024 : 1733 – 1761
 
 [3] Cheng, Xiang, Raveesh Mayya, and João Sedoc. "From Human Annotation to LLMs: SILICON Annotation Workflow for Management Research." *arXiv preprint arXiv:2412.14461* (2024).
 

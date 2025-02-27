@@ -224,3 +224,127 @@ def test_wilson_interval_invalid_inputs():
     # Negative sample size
     with pytest.raises(ValueError):
         calc.wilson_interval(p_hat=0.5, n=-10)
+
+
+def test_agresti_coull_interval_basic(calculator):
+    """Test basic functionality of agresti_coull_interval."""
+    # Test with a simple proportion and sample size
+    result = calculator.agresti_coull_interval(p_hat=0.7, n=100)
+
+    # Check that result contains expected keys
+    assert 'ci_lower' in result
+    assert 'ci_upper' in result
+
+    # Check that bounds are between 0 and 1
+    assert 0 <= result['ci_lower'] <= 1
+    assert 0 <= result['ci_upper'] <= 1
+
+    # Check that lower bound is less than upper bound
+    assert result['ci_lower'] < result['ci_upper']
+
+    # Check that the interval contains the point estimate
+    assert result['ci_lower'] < 0.7 < result['ci_upper']
+
+
+def test_agresti_coull_interval_extreme_values(calculator):
+    """Test agresti_coull_interval with extreme proportions."""
+    # Test with proportion = 0
+    result_0 = calculator.agresti_coull_interval(p_hat=0.0, n=100)
+    assert result_0['ci_lower'] == 0.0
+    assert result_0['ci_upper'] > 0.0
+
+    # Test with proportion = 1
+    result_1 = calculator.agresti_coull_interval(p_hat=1.0, n=100)
+    assert result_1['ci_lower'] < 1.0
+    assert result_1['ci_upper'] == 1.0
+
+
+def test_agresti_coull_interval_small_sample(calculator):
+    """Test agresti_coull_interval with small sample size."""
+    # Test with small sample size
+    result = calculator.agresti_coull_interval(p_hat=0.5, n=10)
+
+    # Check that bounds are between 0 and 1
+    assert 0 <= result['ci_lower'] <= 1
+    assert 0 <= result['ci_upper'] <= 1
+
+    # Check that the interval is wider than with a larger sample
+    large_sample = calculator.agresti_coull_interval(p_hat=0.5, n=1000)
+    assert (result['ci_upper'] - result['ci_lower']) > (large_sample['ci_upper'] - large_sample['ci_lower'])
+
+
+def test_agresti_coull_vs_wilson(calculator):
+    """Compare Agresti-Coull interval with Wilson interval."""
+    # For moderate proportions and large samples, they should be similar
+    ac_result = calculator.agresti_coull_interval(p_hat=0.5, n=1000)
+    wilson_result = calculator.wilson_interval(p_hat=0.5, n=1000)
+
+    # Check that the intervals are similar (within 0.01)
+    assert abs(ac_result['ci_lower'] - wilson_result['ci_lower']) < 0.01
+    assert abs(ac_result['ci_upper'] - wilson_result['ci_upper']) < 0.01
+
+
+def test_bootstrap_basic(calculator):
+    """Test basic functionality of bootstrap method."""
+    # Create sample data: 70 agreements out of 100
+    data = [(1, 1)] * 70 + [(1, 2)] * 30
+
+    # Calculate bootstrap CI with fewer resamples for speed
+    result = calculator.bootstrap(data, n_resamples=100)
+
+    # Check that result contains expected keys
+    assert 'ci_lower' in result
+    assert 'ci_upper' in result
+
+    # Check that bounds are between 0 and 1
+    assert 0 <= result['ci_lower'] <= 1
+    assert 0 <= result['ci_upper'] <= 1
+
+    # Check that lower bound is less than upper bound
+    assert result['ci_lower'] < result['ci_upper']
+
+    # Check that the interval contains the point estimate (0.7)
+    assert result['ci_lower'] < 0.7 < result['ci_upper']
+
+
+def test_bootstrap_custom_statistic(calculator):
+    """Test bootstrap with custom statistic function."""
+    # Create sample data
+    data = [(1, 1), (2, 2), (3, 3), (4, 3), (5, 4)]
+
+    # Define custom statistic: mean absolute difference
+    def mean_abs_diff(sample):
+        return sum(abs(a - b) for a, b in sample) / len(sample)
+
+    # Calculate bootstrap CI with custom statistic
+    result = calculator.bootstrap(data, n_resamples=100, statistic=mean_abs_diff)
+
+    # Check that result contains expected keys
+    assert 'ci_lower' in result
+    assert 'ci_upper' in result
+
+    # The point estimate should be (0 + 0 + 0 + 1 + 1) / 5 = 0.4
+    # Check that the interval contains this value
+    assert result['ci_lower'] <= 0.4 <= result['ci_upper']
+
+
+def test_bootstrap_empty_data(calculator):
+    """Test bootstrap with empty data."""
+    # This should raise a ValueError
+    with pytest.raises(Exception):
+        calculator.bootstrap([])
+
+
+def test_bootstrap_deterministic(calculator):
+    """Test bootstrap with deterministic data."""
+    # All pairs agree
+    all_agree = [(1, 1), (2, 2), (3, 3)]
+    result_agree = calculator.bootstrap(all_agree, n_resamples=100)
+    assert result_agree['ci_lower'] == 1.0
+    assert result_agree['ci_upper'] == 1.0
+
+    # All pairs disagree
+    all_disagree = [(1, 2), (2, 3), (3, 4)]
+    result_disagree = calculator.bootstrap(all_disagree, n_resamples=100)
+    assert result_disagree['ci_lower'] == 0.0
+    assert result_disagree['ci_upper'] == 0.0

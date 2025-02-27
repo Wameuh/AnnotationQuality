@@ -1,13 +1,9 @@
 import os
-import sys
 import pytest
-
-# Add root directory to PYTHONPATH before imports
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(root_dir)
-
-# Now we can import from Utils
 from Utils.logger import Logger, LogLevel
+from src.dataPreparation import DataLoader
+from src.raw_agreement import RawAgreement
+from Utils.confident_interval import ConfidenceIntervalCalculator
 
 
 def pytest_configure(config):
@@ -19,12 +15,20 @@ def pytest_configure(config):
 test_suites = {
     'logger': [os.path.join('Tests', 'UnitTests', 'test_logger.py')],
     'data_loader': [os.path.join('Tests', 'UnitTests', 'test_data_loader.py')],
+    'raw_agreement': [os.path.join('Tests',
+                                   'UnitTests',
+                                   'test_raw_agreement.py')],
+    'pretty_print': [os.path.join('Tests',
+                                  'UnitTests',
+                                  'test_pretty_print.py')],
     'features': [
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py')
     ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
+        os.path.join('Tests', 'UnitTests', 'test_raw_agreement.py'),
+        os.path.join('Tests', 'UnitTests', 'test_pretty_print.py'),
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py')
     ]
 }
@@ -54,3 +58,21 @@ def test_suite(request):
 def logger():
     """Fixture providing a logger instance."""
     return Logger(level=LogLevel.DEBUG)
+
+
+@pytest.fixture
+def data_loader(logger):
+    """Fixture providing a DataLoader instance."""
+    return DataLoader(logger)
+
+
+@pytest.fixture
+def agreement_calc(logger):
+    """Fixture providing a RawAgreement instance."""
+    return RawAgreement(logger)
+
+
+@pytest.fixture
+def ci_calc():
+    """Fixture providing a ConfidenceIntervalCalculator instance."""
+    return ConfidenceIntervalCalculator(confidence=0.95)

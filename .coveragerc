@@ -1,8 +1,11 @@
 [run]
-source = Utils
-omit = 
+source =
+    src
+    Utils
+omit =
     */site-packages/*
     */tests/*
+    */Tests/*
     */__init__.py
 
 [report]
@@ -13,6 +16,7 @@ exclude_lines =
     if __name__ == .__main__.:
     pass
     raise ImportError
+    except ImportError:
 
 [html]
-directory = coverage_html 
+directory = coverage_html

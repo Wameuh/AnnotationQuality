@@ -7,4 +7,6 @@ flake8>=6.1.0
 black>=23.7.0
 
 # Project Dependencies
-# (ajoutez ici les dépendances spécifiques à votre projet) 
+pandas>=2.0.0
+scipy>=1.11.0
+tabulate>=0.9.0

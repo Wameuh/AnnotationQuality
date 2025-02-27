@@ -33,9 +33,7 @@ It is important to note that **the choice of IAA measure depends on the nature o
 **IAA-Eval** is designed to be a user-friendly CLI tool with the following key features:
 
 * **Data Loading and Preprocessing:** Reads annotation data from various file formats, including CSV and JSON. Supports different annotation types (categorical, numerical, etc.)
-
 * **Test Data Note:** For testing purposes, the file `Tests/Assets/Reviews_annotated.csv` has been generated using the program available at [LLM-Tests](https://github.com/Wameuh/LLM-Tests), which provides sentiment annotations for Amazon reviews.
-
 * **IAA Calculation:** Computes various IAA metrics, including Cohen's Kappa, Fleiss' Kappa, Krippendorff's Alpha, and F-measure. Enables pairwise and overall IAA calculation [1].
 * **Data Filtering:** Allows for data filtering by annotator or item to assess agreement subsets.
 * **Visualization:**  Generates graphs and tables to present IAA results clearly, aiding in interpretation. Provides options for saving these visualizations to files.
@@ -95,12 +93,19 @@ iaa-eval --input annotations.csv --format csv --annotator_col annotator_id --ite
 [1] Artstein, R. (2017). Inter-annotator Agreement. In: Ide, N., Pustejovsky, J. (eds) Handbook of Linguistic Annotation. Springer, Dordrecht. https://doi.org/10.1007/978-94-024-0881-2_11
 
 [2] Vámos, Csilla et al. ‘Ontology of Active and Passive Environmental Exposure’. 1 Jan. 2024 : 1733 – 1761
+
 [3] Cheng, Xiang, Raveesh Mayya, and João Sedoc. "From Human Annotation to LLMs: SILICON Annotation Workflow for Management Research." *arXiv preprint arXiv:2412.14461* (2024).
+
 [4] Reyero Lobo, Paula, et al. "Enhancing Hate Speech Annotations with Background Semantics."  *ECAI 2024* . IOS Press, 2024. 3923-3930.
+
 [5] McHugh ML. Interrater reliability: the kappa statistic. Biochem Med (Zagreb). 2012;22(3):276-82. PMID: 23092060; PMCID: PMC3900052.
+
 [6] Hayes, A.F., Krippendorff, K.: Answering the call for a standard reliability measure for coding data. Commun. Methods Meas. 1(1), 77–89 (2007)
+
 [7] Zhang, Ziqi, Sam Chapman, and Fabio Ciravegna. "A methodology towards effective and efficient manual document annotation: addressing annotator discrepancy and annotation quality."  *Knowledge Engineering and Management by the Masses: 17th International Conference, EKAW 2010, Lisbon, Portugal, October 11-15, 2010. Proceedings 17* . Springer Berlin Heidelberg, 2010.
+
 [8] Reyero Lobo, Paula, et al. "Enhancing Hate Speech Annotations with Background Semantics."  *ECAI 2024* . IOS Press, 2024. 3923-3930.
+
 [9] Krippendorff, K.: Reliability in content analysis: some common misconceptions and recom-mendations. Hum. Commun. Res. 30(3), 411–433 (2004)
 
 ## Contributing

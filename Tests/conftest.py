@@ -4,6 +4,7 @@ from Utils.logger import Logger, LogLevel
 from src.dataPreparation import DataLoader
 from src.raw_agreement import RawAgreement
 from src.cohen_kappa import CohenKappa
+from src.fleiss_kappa import FleissKappa
 from Utils.confident_interval import ConfidenceIntervalCalculator
 
 
@@ -24,23 +25,30 @@ test_suites = {
         os.path.join('Tests', 'UnitTests', 'test_cohen_kappa.py'),
         os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py')
     ],
+    'fleiss_kappa': [
+        os.path.join('Tests', 'UnitTests', 'test_fleiss_kappa.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py')
+    ],
     'pretty_print': [os.path.join('Tests', 'UnitTests', 'test_pretty_print.py')],
     'confidence_interval': [os.path.join('Tests', 'UnitTests', 'test_confidence_interval.py')],
     'features': [
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
         os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py')
+        os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py')
     ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
         os.path.join('Tests', 'UnitTests', 'test_raw_agreement.py'),
         os.path.join('Tests', 'UnitTests', 'test_cohen_kappa.py'),
+        os.path.join('Tests', 'UnitTests', 'test_fleiss_kappa.py'),
         os.path.join('Tests', 'UnitTests', 'test_confidence_interval.py'),
         os.path.join('Tests', 'UnitTests', 'test_pretty_print.py'),
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
         os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py')
+        os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py')
     ]
 }
 
@@ -90,6 +98,23 @@ def kappa_calc(logger):
 
 
 @pytest.fixture
+def fleiss_kappa_calc(logger):
+    """Fixture providing a FleissKappa instance."""
+    return FleissKappa(logger)
+
+
+@pytest.fixture
 def ci_calc():
     """Fixture providing a ConfidenceIntervalCalculator instance."""
     return ConfidenceIntervalCalculator(confidence=0.95)
+
+
+@pytest.fixture
+def real_data(data_loader):
+    """Fixture providing the real data from the Reviews_annotated.csv file."""
+    base_dir = os.path.dirname(os.path.dirname(__file__))
+    data_file = os.path.join(base_dir, "Tests", "Assets", "Reviews_annotated.csv")
+
+    # Load the data
+    df = data_loader.load_data(data_file)
+    return df

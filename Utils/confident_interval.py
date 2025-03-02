@@ -2,6 +2,7 @@ import numpy as np
 import scipy.stats
 from scipy.stats import norm
 from typing import List, Tuple, Optional
+from Utils.logger import LogLevel, get_logger
 
 
 class ConfidenceIntervalCalculator:
@@ -11,7 +12,9 @@ class ConfidenceIntervalCalculator:
      * Standard confidence interval
     """
 
-    def __init__(self, confidence: float = 0.95):
+    def __init__(self,
+                 confidence: float = 0.95,
+                 level: LogLevel = LogLevel.INFO):
         """
         Initialize the ConfidenceIntervalCalculator.
 
@@ -21,6 +24,8 @@ class ConfidenceIntervalCalculator:
         Raises:
             ValueError: If confidence is not between 0 and 1.
         """
+        # Use get_logger() to obtain the singleton instance
+        self._logger = get_logger(level)
         if not 0 < confidence < 1:
             raise ValueError(
                 f"Confidence level must be between 0 and 1, got {confidence}"
@@ -28,6 +33,12 @@ class ConfidenceIntervalCalculator:
         self.confidence = confidence
         self.z_value = norm.ppf((1 + confidence) / 2)
 
+    @property
+    def logger(self):
+        """Get the logger instance."""
+        return self._logger
+
+    @get_logger().log_scope
     def wilson_interval(self, p_hat: float, n: int) -> dict[str, float]:
         """
         Calculate Wilson confidence interval for a proportion.
@@ -68,6 +79,7 @@ class ConfidenceIntervalCalculator:
             'ci_upper': ci_upper
         }
 
+    @get_logger().log_scope
     def clopper_pearson_interval(self,
                                  p_hat: float,
                                  n: int) -> dict[str, float]:
@@ -105,6 +117,7 @@ class ConfidenceIntervalCalculator:
             'ci_upper': upper_bound
         }
 
+    @get_logger().log_scope
     def standard_interval(self, p_hat: float, n: int) -> dict[str, float]:
         """
         Calculate standard confidence interval for a proportion.
@@ -141,6 +154,7 @@ class ConfidenceIntervalCalculator:
             'ci_upper': ci_upper
         }
 
+    @get_logger().log_scope
     def agresti_coull_interval(self, p_hat: float, n: int) -> dict[str, float]:
         """
         Calculate Agresti-Coull interval, which is an improved version of the
@@ -175,6 +189,7 @@ class ConfidenceIntervalCalculator:
             'ci_upper': ci_upper
         }
 
+    @get_logger().log_scope
     def bootstrap(self,
                   data: List[Tuple[int, int]],
                   n_resamples: int = 1000,
@@ -215,6 +230,7 @@ class ConfidenceIntervalCalculator:
             'ci_upper': ci_upper
         }
 
+    @get_logger().log_scope
     def normal_approximation(self, p_hat: float, n: int) -> dict[str, float]:
         """
         Calculate confidence interval using normal approximation.

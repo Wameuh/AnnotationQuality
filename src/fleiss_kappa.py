@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from typing import Dict
+from Utils.logger import get_logger, LogLevel
 
 
 class FleissKappa:
@@ -13,15 +14,22 @@ class FleissKappa:
     be expected by chance.
     """
 
-    def __init__(self, logger):
+    def __init__(self, level: LogLevel = LogLevel.INFO):
         """
         Initialize the FleissKappa calculator.
 
         Args:
             logger: Logger instance for logging messages.
         """
-        self._logger = logger
+        # Use get_logger() to obtain the singleton instance
+        self._logger = get_logger(level)
 
+    @property
+    def logger(self):
+        """Get the logger instance."""
+        return self._logger
+
+    @get_logger().log_scope
     def calculate(self, df: pd.DataFrame) -> float:
         """
         Calculate Fleiss' Kappa for all annotators.
@@ -124,6 +132,7 @@ class FleissKappa:
 
         return kappa
 
+    @get_logger().log_scope
     def calculate_by_category(self, df: pd.DataFrame) -> Dict[int, float]:
         """
         Calculate Fleiss' Kappa for each category separately.
@@ -213,6 +222,7 @@ class FleissKappa:
 
         return kappas
 
+    @get_logger().log_scope
     def interpret_kappa(self, kappa: float) -> str:
         """
         Interpret the Fleiss' Kappa value according to Landis and Koch's scale.

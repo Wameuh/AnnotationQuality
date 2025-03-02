@@ -44,11 +44,11 @@ class ContextLogger:
                     f"++ {self.function_name}() ++"
                 )
                 self.logger.debug(entry_message)
-            return self
         except Exception as e:
             self.logger.warning(
                 f"Failed to initialize logging context: {str(e)}"
             )
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
@@ -74,11 +74,35 @@ class Logger:
     A logging utility class that provides different levels of logging
     with optional verbosity control and function call tracing.
     Supports context-based logging for function entry/exit points.
+
+    This class is implemented as a singleton to ensure only one logger
+    instance exists throughout the application.
     """
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls, level: LogLevel = LogLevel.DEBUG,
+                output: TextIO = sys.stdout):
+        """
+        Create a singleton instance of Logger.
+
+        Args:
+            level (LogLevel): The logging level. Defaults to LogLevel.DEBUG.
+            output (TextIO): Output stream to write logs to. Defaults to stdout
+
+        Returns:
+            Logger: The singleton instance of Logger
+        """
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(Logger, cls).__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
+
     def __init__(self, level: LogLevel = LogLevel.DEBUG,
                  output: TextIO = sys.stdout):
         """
-        Initialize the Logger.
+        Initialize the Logger singleton (only once).
 
         Args:
             level (LogLevel): The logging level. Defaults to LogLevel.DEBUG.
@@ -87,10 +111,15 @@ class Logger:
         Raises:
             ValueError: If level is not a valid LogLevel
         """
+        # Only initialize once
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+
         if not isinstance(level, LogLevel):
             raise ValueError("Level must be a valid LogLevel enum value")
         self.level = level
         self.output = output
+        self._initialized = True
 
     def __write__(self, message: str) -> None:
         """Write a message to the output stream."""
@@ -199,3 +228,31 @@ class Logger:
                     self.error(f"Exception in {func.__name__}: {str(e)}")
                     raise
         return wrapper
+
+
+# Convenience function to get the logger instance
+def get_logger(level: LogLevel = None,
+               output: TextIO = None) -> Logger:
+    """
+    Get the singleton instance of the Logger.
+
+    Args:
+        level (LogLevel, optional):
+            The logging level (only used if creating a new instance)
+        output (TextIO, optional):
+            Output stream (only used if creating a new instance)
+
+    Returns:
+        Logger: The singleton Logger instance
+    """
+    # Check if the singleton instance already exists
+    if Logger._instance is not None:
+        # Return the existing instance without modifying its properties
+        return Logger._instance
+
+    # If no instance exists, create a new one with the provided or
+    # default values
+    default_level = level if level is not None else LogLevel.INFO
+    default_output = output if output is not None else sys.stdout
+
+    return Logger(default_level, default_output)

@@ -1,5 +1,5 @@
 import pandas as pd
-from Utils.logger import Logger, LogLevel
+from Utils.logger import Logger, LogLevel, get_logger
 
 
 class DataLoader:
@@ -11,18 +11,19 @@ class DataLoader:
     It also includes basic data validation and handles missing data.
     """
 
-    def __init__(self, logger: Logger = None):
+    def __init__(self, level: LogLevel = LogLevel.INFO):
         """
-        Initializes the DataLoader.
+        Initialize DataLoader.
 
         Args:
-            logger (Logger, optional): Logger instance for tracking operations.
-                If None, creates a new logger.
+            logger (Logger, optional): Logger instance. If None, uses the
+                singleton.
         """
-        self._logger = logger or Logger(level=LogLevel.INFO)
+        # Use get_logger() to obtain the singleton instance
+        self._logger = get_logger(level)
 
     @property
-    def logger(self) -> Logger:
+    def logger(self):
         """Get the logger instance."""
         return self._logger
 
@@ -33,6 +34,7 @@ class DataLoader:
             raise ValueError("logger must be an instance of Logger")
         self._logger = logger
 
+    @get_logger().log_scope
     def load_data(self, file_path: str) -> pd.DataFrame:
         """
         Load and prepare data from CSV file.
@@ -108,6 +110,7 @@ class DataLoader:
             self._logger.error(f"Error loading data: {str(e)}")
             raise ValueError(f"Error loading CSV file: {str(e)}")
 
+    @get_logger().log_scope
     def _identify_id_column(self, columns):
         """
         Identify the ID column in the CSV file.
@@ -126,6 +129,7 @@ class DataLoader:
                 return candidate
         return None
 
+    @get_logger().log_scope
     def _is_standard_format(self, columns):
         """
         Check if CSV is in standard format.
@@ -141,6 +145,7 @@ class DataLoader:
 
         return 'AnnotatorName' in columns and 'Score' in columns
 
+    @get_logger().log_scope
     def _is_name_score_format(self, columns):
         """
         Check if CSV is in wide format with name and score columns.
@@ -177,6 +182,7 @@ class DataLoader:
 
         return True
 
+    @get_logger().log_scope
     def _is_wide_format(self, columns):
         """
         Check if CSV is in wide format with score columns only.
@@ -194,6 +200,7 @@ class DataLoader:
         # wide format
         return len(columns) > 1
 
+    @get_logger().log_scope
     def _process_standard_format(self, df):
         """Process CSV in standard format."""
         # Create an explicit copy of the DataFrame
@@ -221,6 +228,7 @@ class DataLoader:
         )
         return wide_df
 
+    @get_logger().log_scope
     def _process_wide_format(self, df):
         """Process CSV in wide format with score columns only."""
         # Create an explicit copy of the DataFrame
@@ -247,6 +255,7 @@ class DataLoader:
         # Set ID as index
         return df.set_index(id_column)[annotator_cols]
 
+    @get_logger().log_scope
     def _process_name_score_format(self, df):
         """Process CSV in wide format with name and score columns."""
         # Create an explicit copy of the DataFrame
@@ -304,6 +313,7 @@ class DataLoader:
 
         return result_df
 
+    @get_logger().log_scope
     def load_csv(self, file_path: str) -> pd.DataFrame:
         """
         Legacy method to load data from a CSV file.

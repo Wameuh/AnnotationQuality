@@ -1,12 +1,42 @@
 import pytest
 import numpy as np
 from Utils.confident_interval import ConfidenceIntervalCalculator
+from Utils.logger import Logger, get_logger, LogLevel
+
+
+@pytest.fixture(autouse=True)
+def reset_logger_singleton():
+    """Reset the logger singleton before each test."""
+    # Reset the singleton instance
+    Logger._instance = None
+    yield
+    # Clean up after test
+    Logger._instance = None
 
 
 @pytest.fixture
 def calculator():
     """Fixture providing a ConfidenceIntervalCalculator instance."""
     return ConfidenceIntervalCalculator(confidence=0.95)
+
+
+def test_init_with_logger():
+    """Test initialization with a logger instance."""
+    # Get the singleton instance of the logger
+    singleton_logger = get_logger()
+
+    # Create a DataLoader without passing a logger explicitly
+    CIC = ConfidenceIntervalCalculator()
+
+    # Verify that the DataLoader's logger is the singleton instance
+    assert CIC.logger is singleton_logger
+
+
+def test_init_without_logger():
+    """Test DataLoader initialization without a logger."""
+    CIC = ConfidenceIntervalCalculator(level=LogLevel.DEBUG)
+    assert isinstance(CIC.logger, Logger)
+    assert CIC.logger.level == LogLevel.DEBUG
 
 
 def test_wilson_perfect_agreement():
@@ -270,7 +300,9 @@ def test_agresti_coull_interval_small_sample(calculator):
 
     # Check that the interval is wider than with a larger sample
     large_sample = calculator.agresti_coull_interval(p_hat=0.5, n=1000)
-    assert (result['ci_upper'] - result['ci_lower']) > (large_sample['ci_upper'] - large_sample['ci_lower'])
+    assert (
+        result['ci_upper'] - result['ci_lower']
+    ) > (large_sample['ci_upper'] - large_sample['ci_lower'])
 
 
 def test_agresti_coull_vs_wilson(calculator):
@@ -317,7 +349,9 @@ def test_bootstrap_custom_statistic(calculator):
         return sum(abs(a - b) for a, b in sample) / len(sample)
 
     # Calculate bootstrap CI with custom statistic
-    result = calculator.bootstrap(data, n_resamples=100, statistic=mean_abs_diff)
+    result = calculator.bootstrap(data,
+                                  n_resamples=100,
+                                  statistic=mean_abs_diff)
 
     # Check that result contains expected keys
     assert 'ci_lower' in result
@@ -392,7 +426,9 @@ def test_normal_approximation_sample_size(ci_calc):
     large_sample = ci_calc.normal_approximation(p_hat=0.5, n=1000)
 
     # Interval should be wider with smaller sample size
-    assert (small_sample['ci_upper'] - small_sample['ci_lower']) > (large_sample['ci_upper'] - large_sample['ci_lower'])
+    assert (
+        small_sample['ci_upper'] - small_sample['ci_lower']
+        ) > (large_sample['ci_upper'] - large_sample['ci_lower'])
 
 
 def test_normal_approximation_confidence_levels():

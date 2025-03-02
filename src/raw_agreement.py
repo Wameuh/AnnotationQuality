@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from typing import Tuple, Dict
-from Utils.logger import Logger, LogLevel
+from Utils.logger import LogLevel, get_logger
 
 
 class RawAgreement:
@@ -14,7 +14,7 @@ class RawAgreement:
     score.
     """
 
-    def __init__(self, logger: Logger = None):
+    def __init__(self, level: LogLevel = LogLevel.INFO):
         """
         Initialize RawAgreement calculator.
 
@@ -22,8 +22,15 @@ class RawAgreement:
             logger (Logger, optional): Logger instance for tracking operations.
                 If None, creates a new logger.
         """
-        self._logger = logger or Logger(level=LogLevel.INFO)
+        # Use get_logger() to obtain the singleton instance
+        self._logger = get_logger(level)
 
+    @property
+    def logger(self):
+        """Get the logger instance."""
+        return self._logger
+
+    @get_logger().log_scope
     def calculate_pairwise(self,
                            df: pd.DataFrame) -> Dict[Tuple[str, str], float]:
         """
@@ -62,6 +69,7 @@ class RawAgreement:
 
         return agreements
 
+    @get_logger().log_scope
     def calculate_overall(self, df: pd.DataFrame) -> float:
         """
         Calculate overall raw agreement across all annotators.
@@ -103,6 +111,7 @@ class RawAgreement:
 
         return overall_agreement
 
+    @get_logger().log_scope
     def get_agreement_statistics(self, df: pd.DataFrame) -> Dict[str, float]:
         """
         Calculate comprehensive agreement statistics.

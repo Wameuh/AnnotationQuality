@@ -2,13 +2,17 @@ import pytest
 import pandas as pd
 import numpy as np
 from src.fleiss_kappa import FleissKappa
-from Utils.logger import Logger, LogLevel
+from Utils.logger import Logger, get_logger, LogLevel
 
 
-@pytest.fixture
-def logger():
-    """Fixture providing a logger instance."""
-    return Logger(level=LogLevel.DEBUG)
+@pytest.fixture(autouse=True)
+def reset_logger_singleton():
+    """Reset the logger singleton before each test."""
+    # Reset the singleton instance
+    Logger._instance = None
+    yield
+    # Clean up after test
+    Logger._instance = None
 
 
 @pytest.fixture
@@ -49,6 +53,25 @@ def missing_values_df():
         'Annotator3_score': [np.nan, 3, 3, 1, 1],
     }
     return pd.DataFrame(data, index=['rev1', 'rev2', 'rev3', 'rev4', 'rev5'])
+
+
+def test_init_with_logger():
+    """Test initialization with a logger instance."""
+    # Get the singleton instance of the logger
+    singleton_logger = get_logger()
+
+    # Create a DataLoader without passing a logger explicitly
+    FK = FleissKappa()
+
+    # Verify that the DataLoader's logger is the singleton instance
+    assert FK.logger is singleton_logger
+
+
+def test_init_without_logger():
+    """Test DataLoader initialization without a logger."""
+    FK = FleissKappa(level=LogLevel.DEBUG)
+    assert isinstance(FK.logger, Logger)
+    assert FK.logger.level == LogLevel.DEBUG
 
 
 def test_calculate_perfect_agreement(kappa_calc, perfect_agreement_df):

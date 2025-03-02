@@ -2,6 +2,7 @@ import pytest
 import io
 import sys
 from Utils.logger import Logger, LogLevel, ContextLogger, get_logger
+from Utils.logger import init_logger
 
 
 @pytest.fixture(autouse=True)
@@ -287,3 +288,40 @@ def test_context_logger_exit_missing_attributes():
 
     # This should not log anything because level is not DEBUG
     context.__exit__(None, None, None)
+
+
+def test_init_logger():
+    """
+    Test that init_logger properly resets and initializes the logger singleton.
+    """
+    # First, create a logger with INFO level
+    initial_logger = get_logger(level=LogLevel.INFO)
+    assert initial_logger.level == LogLevel.INFO
+
+    # Now initialize a new logger with DEBUG level
+    debug_logger = init_logger(level=LogLevel.DEBUG)
+
+    # Check that the new logger has DEBUG level
+    assert debug_logger.level == LogLevel.DEBUG
+
+    # Check that get_logger now returns the new instance
+    singleton = get_logger()
+    assert singleton is debug_logger
+    assert singleton.level == LogLevel.DEBUG
+
+    # Test with a custom output stream
+    output_stream = io.StringIO()
+    custom_logger = init_logger(level=LogLevel.ERROR, output=output_stream)
+
+    # Check that the new logger has the custom settings
+    assert custom_logger.level == LogLevel.ERROR
+    assert custom_logger.output is output_stream
+
+    # Verify that the singleton was updated
+    assert get_logger() is custom_logger
+
+    # Test that logging works with the new output stream
+    custom_logger.error("Test error message")
+    output = output_stream.getvalue()
+    assert "Test error message" in output
+    assert "[ERROR]" in output

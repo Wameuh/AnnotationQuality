@@ -22,15 +22,27 @@ class ContextLogger:
     and exited (at destruction), including file name, line number,
     and thread information.
     """
-    def __init__(self, logger: 'Logger', func):
+    def __init__(self, func_or_logger, func_or_none=None):
         """
         Initialize the context logger and log the function entry.
 
         Args:
-            logger (Logger): The logger instance to use for logging.
-            func: The function being logged.
+            func_or_logger: Either the function to log or a logger instance.
+            func_or_none: If func_or_logger is a logger, this should be the
+                                function.
+                         If func_or_logger is a function, this can be None.
         """
-        self.logger = logger
+        # Determine which parameter is the function and which is the logger
+        if func_or_none is None:
+            # First parameter is the function, use singleton logger
+            func = func_or_logger
+            self.logger = get_logger()
+        else:
+            # First parameter is the logger, second is the function
+            self.logger = func_or_logger
+            func = func_or_none
+
+        # Store function information
         self.function_name = func.__name__
         self.function_file = os.path.basename(func.__code__.co_filename)
         self.function_line = func.__code__.co_firstlineno
@@ -81,7 +93,7 @@ class Logger:
     _instance = None
     _lock = threading.Lock()
 
-    def __new__(cls, level: LogLevel = LogLevel.DEBUG,
+    def __new__(cls, level: LogLevel = LogLevel.INFO,
                 output: TextIO = sys.stdout):
         """
         Create a singleton instance of Logger.
@@ -154,7 +166,7 @@ class Logger:
             str: The formatted message with timestamp, thread ID,
                                                                 and level name
         """
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
         thread_id = threading.get_ident()
         return (
             f"[{timestamp}] [TID: {thread_id}] "
@@ -220,7 +232,7 @@ class Logger:
         """
         @wraps(func)
         def wrapper(*args, **kwargs):
-            with ContextLogger(self, func):
+            with ContextLogger(func_or_logger=func, func_or_none=None):
                 try:
                     result = func(*args, **kwargs)
                     return result
@@ -256,3 +268,24 @@ def get_logger(level: LogLevel = None,
     default_output = output if output is not None else sys.stdout
 
     return Logger(default_level, default_output)
+
+
+def init_logger(level: LogLevel = LogLevel.INFO,
+                output: TextIO = sys.stdout) -> Logger:
+    """
+    Initialize or reinitialize the logger singleton with specified settings.
+    This function will reset any existing logger instance and create a new one.
+
+    Args:
+        level (LogLevel, optional): The logging level. Defaults to
+                                    LogLevel.INFO.
+        output (TextIO, optional): Output stream. Defaults to sys.stdout.
+
+    Returns:
+        Logger: The newly initialized logger instance
+    """
+    # Reset the singleton instance
+    Logger._instance = None
+
+    # Create and return a new instance
+    return Logger(level, output)

@@ -2,19 +2,23 @@ import pytest
 import pandas as pd
 import numpy as np
 from src.cohen_kappa import CohenKappa
-from Utils.logger import Logger, LogLevel
+from Utils.logger import Logger, LogLevel, get_logger
+
+
+@pytest.fixture(autouse=True)
+def reset_logger_singleton():
+    """Reset the logger singleton before each test."""
+    # Reset the singleton instance
+    Logger._instance = None
+    yield
+    # Clean up after test
+    Logger._instance = None
 
 
 @pytest.fixture
-def logger():
-    """Fixture providing a logger instance."""
-    return Logger(level=LogLevel.DEBUG)
-
-
-@pytest.fixture
-def kappa_calc(logger):
+def kappa_calc():
     """Fixture providing a CohenKappa instance."""
-    return CohenKappa(logger)
+    return CohenKappa(level=LogLevel.DEBUG)
 
 
 @pytest.fixture
@@ -23,7 +27,8 @@ def sample_df():
     # Create a sample DataFrame with 5 reviews and 3 annotators
     data = {
         'Annotator1_score': [5, 4, 3, 2, 1],
-        'Annotator2_score': [5, 4, 3, 2, 1],  # Perfect agreement with Annotator1
+        'Annotator2_score': [5, 4, 3, 2, 1],  # Perfect agreement with
+                                              # Annotator1
         'Annotator3_score': [5, 3, 3, 1, 1],  # Partial agreement with others
     }
     return pd.DataFrame(data, index=['rev1', 'rev2', 'rev3', 'rev4', 'rev5'])
@@ -39,6 +44,25 @@ def sample_df_with_missing():
         'Annotator3_score': [np.nan, 3, 3, 1, 1],
     }
     return pd.DataFrame(data, index=['rev1', 'rev2', 'rev3', 'rev4', 'rev5'])
+
+
+def test_init_with_logger():
+    """Test initialization with a logger instance."""
+    # Get the singleton instance of the logger
+    singleton_logger = get_logger()
+
+    # Create a DataLoader without passing a logger explicitly
+    CK = CohenKappa()
+
+    # Verify that the DataLoader's logger is the singleton instance
+    assert CK.logger is singleton_logger
+
+
+def test_init_without_logger():
+    """Test DataLoader initialization without a logger."""
+    CK = CohenKappa(level=LogLevel.DEBUG)
+    assert isinstance(CK.logger, Logger)
+    assert CK.logger.level == LogLevel.DEBUG
 
 
 def test_calculate_kappa_perfect_agreement(kappa_calc):
@@ -57,7 +81,8 @@ def test_calculate_kappa_perfect_agreement(kappa_calc):
 def test_calculate_kappa_chance_agreement(kappa_calc):
     """Test _calculate_kappa with agreement by chance."""
     # Create two arrays with no correlation (simulating chance agreement)
-    # For simplicity, we'll use a contrived example where expected agreement equals observed
+    # For simplicity, we'll use a contrived example where expected agreement
+    #  equals observed
     a = np.array([1, 2, 1, 2, 1])
     b = np.array([1, 1, 2, 2, 1])
 
@@ -104,8 +129,10 @@ def test_calculate_pairwise(kappa_calc, sample_df):
 
     # Check kappa values
     assert kappas[('Annotator1', 'Annotator2')] == 1.0  # Perfect agreement
-    assert 0.0 < kappas[('Annotator1', 'Annotator3')] < 1.0  # Partial agreement
-    assert 0.0 < kappas[('Annotator2', 'Annotator3')] < 1.0  # Partial agreement
+    assert 0.0 < kappas[('Annotator1', 'Annotator3')] < 1.0  # Partial
+    # agreement
+    assert 0.0 < kappas[('Annotator2', 'Annotator3')] < 1.0  # Partial
+    # agreement
 
 
 def test_calculate_pairwise_with_missing(kappa_calc, sample_df_with_missing):
@@ -119,10 +146,14 @@ def test_calculate_pairwise_with_missing(kappa_calc, sample_df_with_missing):
     assert ('Annotator2', 'Annotator3') in kappas
 
     # Check that missing values are handled correctly
-    # For Annotator1 and Annotator2, there are 3 complete reviews (two have missing values)
-    # For Annotator1 and Annotator3, there are 3 complete reviews (two have missing values)
-    # For Annotator2 and Annotator3, there are 2 complete reviews (three have missing values)
-    assert kappas[('Annotator1', 'Annotator2')] == 1.0  # Still perfect agreement
+    # For Annotator1 and Annotator2, there are 3 complete reviews
+    # (two have missing values)
+    # For Annotator1 and Annotator3, there are 3 complete reviews
+    # (two have missing values)
+    # For Annotator2 and Annotator3, there are 2 complete reviews
+    # (three have missing values)
+    assert kappas[('Annotator1', 'Annotator2')] == 1.0  # Still perfect
+    # agreement
 
 
 def test_get_kappa_statistics(kappa_calc, sample_df):

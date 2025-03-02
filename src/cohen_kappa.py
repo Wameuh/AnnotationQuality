@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, Tuple, Optional
-from Utils.logger import Logger, LogLevel
+from typing import Dict, Tuple
+from Utils.logger import get_logger, LogLevel
 
 
 class CohenKappa:
@@ -12,16 +12,23 @@ class CohenKappa:
     taking into account the agreement that would be expected by chance.
     """
 
-    def __init__(self, logger: Optional[Logger] = None):
+    def __init__(self, level: LogLevel = LogLevel.INFO):
         """
         Initialize CohenKappa calculator.
 
         Args:
-            logger (Logger, optional): Logger instance for tracking operations.
-                If None, creates a new logger.
+            level (LogLevel, optional): Logging level.
+                Defaults to LogLevel.INFO.
         """
-        self._logger = logger or Logger(level=LogLevel.INFO)
+        # Use get_logger() to obtain the singleton instance
+        self._logger = get_logger(level)
 
+    @property
+    def logger(self):
+        """Get the logger instance."""
+        return self._logger
+
+    @get_logger().log_scope
     def calculate_pairwise(self,
                            df: pd.DataFrame) -> Dict[Tuple[str, str], float]:
         """
@@ -64,6 +71,7 @@ class CohenKappa:
 
         return kappas
 
+    @get_logger().log_scope
     def _calculate_kappa(self, a: np.ndarray, b: np.ndarray) -> float:
         """
         Calculate Cohen's Kappa for two annotators.
@@ -114,6 +122,7 @@ class CohenKappa:
 
         return kappa
 
+    @get_logger().log_scope
     def get_kappa_statistics(self, df: pd.DataFrame) -> Dict[str, float]:
         """
         Calculate comprehensive Cohen's Kappa statistics.
@@ -150,6 +159,7 @@ class CohenKappa:
 
         return stats_data
 
+    @get_logger().log_scope
     def interpret_kappa(self, kappa: float) -> str:
         """
         Interpret Cohen's Kappa value according to common guidelines.

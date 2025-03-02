@@ -4,19 +4,17 @@ import os
 import pandas as pd
 import numpy as np
 from src.dataPreparation import DataLoader
-from Utils.logger import Logger, LogLevel
+from Utils.logger import Logger, LogLevel, get_logger
 
 
-@pytest.fixture
-def logger():
-    """Fixture providing a logger instance."""
-    return Logger(level=LogLevel.DEBUG)
-
-
-@pytest.fixture
-def data_loader(logger):
-    """Fixture providing a DataLoader instance."""
-    return DataLoader(logger)
+@pytest.fixture(autouse=True)
+def reset_logger_singleton():
+    """Reset the logger singleton before each test."""
+    # Reset the singleton instance
+    Logger._instance = None
+    yield
+    # Clean up after test
+    Logger._instance = None
 
 
 @pytest.fixture
@@ -66,17 +64,23 @@ def sample_csv(tmp_path):
     return str(csv_file)
 
 
-def test_init_with_logger(logger):
-    """Test DataLoader initialization with a logger."""
-    loader = DataLoader(logger)
-    assert loader.logger == logger
+def test_init_with_logger():
+    """Test initialization with a logger instance."""
+    # Get the singleton instance of the logger
+    singleton_logger = get_logger()
+
+    # Create a DataLoader without passing a logger explicitly
+    data_loader = DataLoader()
+
+    # Verify that the DataLoader's logger is the singleton instance
+    assert data_loader.logger is singleton_logger
 
 
 def test_init_without_logger():
     """Test DataLoader initialization without a logger."""
-    loader = DataLoader()
+    loader = DataLoader(level=LogLevel.DEBUG)
     assert isinstance(loader.logger, Logger)
-    assert loader.logger.level == LogLevel.INFO
+    assert loader.logger.level == LogLevel.DEBUG
 
 
 def test_logger_setter_validation_raise_error():

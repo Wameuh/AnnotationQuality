@@ -173,3 +173,10 @@ We welcome contributions to **IAA-Eval**. Please see our contributing guidelines
 
 This project is licensed under the MIT license.
 
+## Available Agreement Measures
+
+- Raw agreement (percentage of agreement)
+- Cohen's Kappa (for two annotators)
+- Fleiss' Kappa (for three or more annotators)
+- Krippendorff's Alpha (for any number of annotators, handles missing data)
+

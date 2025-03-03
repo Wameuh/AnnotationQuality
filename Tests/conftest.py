@@ -29,13 +29,18 @@ test_suites = {
         os.path.join('Tests', 'UnitTests', 'test_fleiss_kappa.py'),
         os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py')
     ],
+    'krippendorff_alpha': [
+        os.path.join('Tests', 'UnitTests', 'test_krippendorff_alpha.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py')
+    ],
     'pretty_print': [os.path.join('Tests', 'UnitTests', 'test_pretty_print.py')],
     'confidence_interval': [os.path.join('Tests', 'UnitTests', 'test_confidence_interval.py')],
     'features': [
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
         os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
         os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py')
+        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py')
     ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
@@ -43,12 +48,14 @@ test_suites = {
         os.path.join('Tests', 'UnitTests', 'test_raw_agreement.py'),
         os.path.join('Tests', 'UnitTests', 'test_cohen_kappa.py'),
         os.path.join('Tests', 'UnitTests', 'test_fleiss_kappa.py'),
+        os.path.join('Tests', 'UnitTests', 'test_krippendorff_alpha.py'),
         os.path.join('Tests', 'UnitTests', 'test_confidence_interval.py'),
         os.path.join('Tests', 'UnitTests', 'test_pretty_print.py'),
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
         os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
         os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py')
+        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py')
     ]
 }
 
@@ -118,3 +125,15 @@ def real_data(data_loader):
     # Load the data
     df = data_loader.load_data(data_file)
     return df
+
+
+# Ajoutez cette ligne pour inclure explicitement le répertoire des tests
+pytest_plugins = [
+    "Tests.UnitTests.test_raw_agreement",
+    "Tests.UnitTests.test_cohen_kappa",
+    "Tests.UnitTests.test_fleiss_kappa",
+    "Tests.UnitTests.test_krippendorff_alpha",
+    "Tests.UnitTests.test_data_loader",
+    "Tests.UnitTests.test_logger",
+    "Tests.FeatureTests.test_krippendorff_alpha_real_data"
+]

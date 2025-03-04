@@ -47,6 +47,9 @@ test_suites = {
         os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py'),
         os.path.join('Tests', 'FeatureTests', 'test_f_measure_real_data.py')
     ],
+    'boundary_weighted_fleiss_kappa': [
+        os.path.join('Tests', 'UnitTests', 'test_boundary_weighted_fleiss_kappa.py')
+    ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
@@ -62,7 +65,8 @@ test_suites = {
         os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py'),
         os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py'),
         os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_f_measure_real_data.py')
+        os.path.join('Tests', 'FeatureTests', 'test_f_measure_real_data.py'),
+        os.path.join('Tests', 'UnitTests', 'test_boundary_weighted_fleiss_kappa.py')
     ]
 }
 
@@ -141,6 +145,13 @@ def f_measure_calc(logger):
     return FMeasure(logger)
 
 
+@pytest.fixture
+def bwfk_calc(logger):
+    """Fixture providing a BoundaryWeightedFleissKappa instance."""
+    from src.boundary_weighted_fleiss_kappa import BoundaryWeightedFleissKappa
+    return BoundaryWeightedFleissKappa(logger)
+
+
 # Ajoutez cette ligne pour inclure explicitement le répertoire des tests
 pytest_plugins = [
     "Tests.UnitTests.test_raw_agreement",
@@ -151,5 +162,6 @@ pytest_plugins = [
     "Tests.UnitTests.test_data_loader",
     "Tests.UnitTests.test_logger",
     "Tests.FeatureTests.test_krippendorff_alpha_real_data",
-    "Tests.FeatureTests.test_f_measure_real_data"
+    "Tests.FeatureTests.test_f_measure_real_data",
+    "Tests.UnitTests.test_boundary_weighted_fleiss_kappa"
 ]

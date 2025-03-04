@@ -21,8 +21,8 @@ Different methods exist for calculating IAA:
 * **Fleiss' Kappa:** This coefficient is used to measure agreement between multiple annotators and is particularly suitable for classification evaluation [5].
 * **Krippendorff's Alpha (α):** Similar to Fleiss' Kappa but more flexible as it can take into account different levels of disagreement and is suitable for incomplete data or with a variable number of annotators [6]. The sources show a range of alpha scores based on different annotation tasks, with some scores showing substantial agreement [1].
 * **F-measure:** This measure calculates agreement using precision, recall, and their harmonic mean. It is particularly useful for tasks such as named entity recognition or classification, where the ability of a model to identify correct entities and its ability to identify all relevant entities must be balanced [].
-* **Boundary-Weighted Fleiss' Kappa (BWFK):** This method is used to evaluate agreement in tissue segmentation, particularly on tissue boundaries. It reduces the impact of minor disagreements that often occur along these boundaries []. This method can be used only on binary segmentation masks.
-* **Distance-Based Cell Agreement Algorithm (DBCAA):** An algorithm that measures agreement in cell detection without relying on ground truth [7].
+* **Boundary-Weighted Fleiss' Kappa (BWFK):** This method is used to evaluate agreement in tissue segmentation, particularly on tissue boundaries. It reduces the impact of minor disagreements that often occur along these boundaries [10]. This method can be used only on binary segmentation masks.
+* **Distance-Based Cell Agreement Algorithm (DBCAA):** An algorithm that measures agreement in cell detection without relying on ground truth [10].
 * **Intersection over Union (IoU)-Based Measures:** These measures are used for regional segmentation but are limited for assessments involving more than two observers [1].
 * **Analysis of Annotation Variance:** For a deeper understanding, an analysis of the variance in annotations can be performed to study how annotations change before and after the introduction of semantics, in order to better understand cases where agreement decreases despite the addition of semantic information [4, 8].
 
@@ -164,6 +164,8 @@ The confidence level (typically 95%) indicates the probability that the true agr
 [8] Reyero Lobo, Paula, et al. "Enhancing Hate Speech Annotations with Background Semantics."  *ECAI 2024* . IOS Press, 2024. 3923-3930.
 
 [9] Krippendorff, K.: Reliability in content analysis: some common misconceptions and recom-mendations. Hum. Commun. Res. 30(3), 411–433 (2004)
+
+[10] Capar, Abdulkerim & Ekinci, Dursun & Ertano, Mucahit & Niazi, M. & Balaban, Erva & Aloglu, Ibrahim & Dogan, Meryem & Su, Ziyu & Aker, Fugen & Gurcan, Metin. (2024). An interpretable framework for inter-observer agreement measurements in TILs scoring on histopathological breast images: A proof-of-principle study. PLOS ONE. 19. 10.1371/journal.pone.0314450.
 
 ## Contributing
 

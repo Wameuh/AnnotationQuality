@@ -31,27 +31,41 @@ test_suites = {
     ],
     'krippendorff_alpha': [
         os.path.join('Tests', 'UnitTests', 'test_krippendorff_alpha.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py')
+        os.path.join('Tests',
+                     'FeatureTests',
+                     'test_krippendorff_alpha_real_data.py')
     ],
     'f_measure': [
         os.path.join('Tests', 'UnitTests', 'test_f_measure.py'),
         os.path.join('Tests', 'FeatureTests', 'test_f_measure_real_data.py')
     ],
-    'pretty_print': [os.path.join('Tests', 'UnitTests', 'test_pretty_print.py')],
-    'confidence_interval': [os.path.join('Tests', 'UnitTests', 'test_confidence_interval.py')],
+    'pretty_print': [os.path.join('Tests',
+                                  'UnitTests',
+                                  'test_pretty_print.py')],
+    'confidence_interval': [os.path.join('Tests',
+                                         'UnitTests',
+                                         'test_confidence_interval.py')],
     'features': [
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
         os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
         os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py'),
+        os.path.join('Tests',
+                     'FeatureTests',
+                     'test_fleiss_kappa_real_data.py'),
+        os.path.join('Tests',
+                     'FeatureTests',
+                     'test_krippendorff_alpha_real_data.py'),
         os.path.join('Tests', 'FeatureTests', 'test_f_measure_real_data.py')
     ],
     'boundary_weighted_fleiss_kappa': [
-        os.path.join('Tests', 'UnitTests', 'test_boundary_weighted_fleiss_kappa.py')
+        os.path.join('Tests',
+                     'UnitTests',
+                     'test_boundary_weighted_fleiss_kappa.py')
     ],
     'distance_based_cell_agreement': [
-        os.path.join('Tests', 'UnitTests', 'test_distance_based_cell_agreement.py')
+        os.path.join('Tests',
+                     'UnitTests',
+                     'test_distance_based_cell_agreement.py')
     ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
@@ -66,11 +80,19 @@ test_suites = {
         os.path.join('Tests', 'FeatureTests', 'test_reviews_loading.py'),
         os.path.join('Tests', 'FeatureTests', 'test_raw_agreement_feature.py'),
         os.path.join('Tests', 'FeatureTests', 'test_cohen_kappa_feature.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py'),
+        os.path.join('Tests',
+                     'FeatureTests',
+                     'test_fleiss_kappa_real_data.py'),
+        os.path.join('Tests',
+                     'FeatureTests',
+                     'test_krippendorff_alpha_real_data.py'),
         os.path.join('Tests', 'FeatureTests', 'test_f_measure_real_data.py'),
-        os.path.join('Tests', 'UnitTests', 'test_boundary_weighted_fleiss_kappa.py'),
-        os.path.join('Tests', 'UnitTests', 'test_distance_based_cell_agreement.py')
+        os.path.join('Tests',
+                     'UnitTests',
+                     'test_boundary_weighted_fleiss_kappa.py'),
+        os.path.join('Tests',
+                     'UnitTests',
+                     'test_distance_based_cell_agreement.py')
     ]
 }
 
@@ -135,7 +157,10 @@ def ci_calc():
 def real_data(data_loader):
     """Fixture providing the real data from the Reviews_annotated.csv file."""
     base_dir = os.path.dirname(os.path.dirname(__file__))
-    data_file = os.path.join(base_dir, "Tests", "Assets", "Reviews_annotated.csv")
+    data_file = os.path.join(base_dir,
+                             "Tests",
+                             "Assets",
+                             "Reviews_annotated.csv")
 
     # Load the data
     df = data_loader.load_data(data_file)

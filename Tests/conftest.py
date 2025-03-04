@@ -50,6 +50,9 @@ test_suites = {
     'boundary_weighted_fleiss_kappa': [
         os.path.join('Tests', 'UnitTests', 'test_boundary_weighted_fleiss_kappa.py')
     ],
+    'distance_based_cell_agreement': [
+        os.path.join('Tests', 'UnitTests', 'test_distance_based_cell_agreement.py')
+    ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
@@ -66,7 +69,8 @@ test_suites = {
         os.path.join('Tests', 'FeatureTests', 'test_fleiss_kappa_real_data.py'),
         os.path.join('Tests', 'FeatureTests', 'test_krippendorff_alpha_real_data.py'),
         os.path.join('Tests', 'FeatureTests', 'test_f_measure_real_data.py'),
-        os.path.join('Tests', 'UnitTests', 'test_boundary_weighted_fleiss_kappa.py')
+        os.path.join('Tests', 'UnitTests', 'test_boundary_weighted_fleiss_kappa.py'),
+        os.path.join('Tests', 'UnitTests', 'test_distance_based_cell_agreement.py')
     ]
 }
 
@@ -152,6 +156,13 @@ def bwfk_calc(logger):
     return BoundaryWeightedFleissKappa(logger)
 
 
+@pytest.fixture
+def dbcaa_calc(logger):
+    """Fixture providing a DistanceBasedCellAgreement instance."""
+    from src.distance_based_cell_agreement import DistanceBasedCellAgreement
+    return DistanceBasedCellAgreement(logger)
+
+
 # Ajoutez cette ligne pour inclure explicitement le répertoire des tests
 pytest_plugins = [
     "Tests.UnitTests.test_raw_agreement",
@@ -163,5 +174,6 @@ pytest_plugins = [
     "Tests.UnitTests.test_logger",
     "Tests.FeatureTests.test_krippendorff_alpha_real_data",
     "Tests.FeatureTests.test_f_measure_real_data",
-    "Tests.UnitTests.test_boundary_weighted_fleiss_kappa"
+    "Tests.UnitTests.test_boundary_weighted_fleiss_kappa",
+    "Tests.UnitTests.test_distance_based_cell_agreement"
 ]

@@ -67,6 +67,10 @@ test_suites = {
                      'UnitTests',
                      'test_distance_based_cell_agreement.py')
     ],
+    'icc': [
+        os.path.join('Tests', 'UnitTests', 'test_icc.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_icc_real_data.py')
+    ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
@@ -92,7 +96,9 @@ test_suites = {
                      'test_boundary_weighted_fleiss_kappa.py'),
         os.path.join('Tests',
                      'UnitTests',
-                     'test_distance_based_cell_agreement.py')
+                     'test_distance_based_cell_agreement.py'),
+        os.path.join('Tests', 'UnitTests', 'test_icc.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_icc_real_data.py')
     ]
 }
 
@@ -188,7 +194,13 @@ def dbcaa_calc(logger):
     return DistanceBasedCellAgreement(logger)
 
 
-# Ajoutez cette ligne pour inclure explicitement le répertoire des tests
+@pytest.fixture
+def icc_calc(logger):
+    """Fixture providing an ICC instance."""
+    from src.icc import ICC
+    return ICC(logger)
+
+
 pytest_plugins = [
     "Tests.UnitTests.test_raw_agreement",
     "Tests.UnitTests.test_cohen_kappa",
@@ -200,5 +212,7 @@ pytest_plugins = [
     "Tests.FeatureTests.test_krippendorff_alpha_real_data",
     "Tests.FeatureTests.test_f_measure_real_data",
     "Tests.UnitTests.test_boundary_weighted_fleiss_kappa",
-    "Tests.UnitTests.test_distance_based_cell_agreement"
+    "Tests.UnitTests.test_distance_based_cell_agreement",
+    "Tests.UnitTests.test_icc",
+    "Tests.FeatureTests.test_icc_real_data"
 ]

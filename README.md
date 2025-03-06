@@ -24,7 +24,7 @@ Different methods exist for calculating IAA:
 * **Boundary-Weighted Fleiss' Kappa (BWFK):** This method is used to evaluate agreement in tissue segmentation, particularly on tissue boundaries. It reduces the impact of minor disagreements that often occur along these boundaries [10]. This method can be used only on binary segmentation masks.
 * **Distance-Based Cell Agreement Algorithm (DBCAA):** An algorithm that measures agreement in cell detection without relying on ground truth [10].
 * **Intersection over Union (IoU)-Based Measures:** These measures are used for regional segmentation but are limited for assessments involving more than two observers [1].
-* **Analysis of Annotation Variance:** For a deeper understanding, an analysis of the variance in annotations can be performed to study how annotations change before and after the introduction of semantics, in order to better understand cases where agreement decreases despite the addition of semantic information [4, 8].
+* **Intra-class correlation coefficient (ICC):** This coefficient measures the degree of agreement between multiple annotators by comparing the variance between annotators to the total variance [11].
 
 It is important to note that **the choice of IAA measure depends on the nature of the data and the annotation task** [1]. Additionally, IAA should not be considered an end in itself, but rather as a tool to understand the data and improve the annotation process. Disagreements between annotators can provide valuable insights [1, 9].
 
@@ -166,6 +166,8 @@ The confidence level (typically 95%) indicates the probability that the true agr
 [9] Krippendorff, K.: Reliability in content analysis: some common misconceptions and recom-mendations. Hum. Commun. Res. 30(3), 411–433 (2004)
 
 [10] Capar, Abdulkerim & Ekinci, Dursun & Ertano, Mucahit & Niazi, M. & Balaban, Erva & Aloglu, Ibrahim & Dogan, Meryem & Su, Ziyu & Aker, Fugen & Gurcan, Metin. (2024). An interpretable framework for inter-observer agreement measurements in TILs scoring on histopathological breast images: A proof-of-principle study. PLOS ONE. 19. 10.1371/journal.pone.0314450.
+
+[11] Koo TK, Li MY. A Guideline of Selecting and Reporting Intraclass Correlation Coefficients for Reliability Research. J Chiropr Med. 2016 Jun;15(2):155-63. doi: 10.1016/j.jcm.2016.02.012. Epub 2016 Mar 31. Erratum in: J Chiropr Med. 2017 Dec;16(4):346. doi: 10.1016/j.jcm.2017.10.001. PMID: 27330520; PMCID: PMC4913118.
 
 ## Contributing
 

@@ -71,6 +71,9 @@ test_suites = {
         os.path.join('Tests', 'UnitTests', 'test_icc.py'),
         os.path.join('Tests', 'FeatureTests', 'test_icc_real_data.py')
     ],
+    'argparser': [
+        os.path.join('Tests', 'UnitTests', 'test_argparser.py')
+    ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
@@ -98,7 +101,8 @@ test_suites = {
                      'UnitTests',
                      'test_distance_based_cell_agreement.py'),
         os.path.join('Tests', 'UnitTests', 'test_icc.py'),
-        os.path.join('Tests', 'FeatureTests', 'test_icc_real_data.py')
+        os.path.join('Tests', 'FeatureTests', 'test_icc_real_data.py'),
+        os.path.join('Tests', 'UnitTests', 'test_argparser.py')
     ]
 }
 
@@ -214,5 +218,6 @@ pytest_plugins = [
     "Tests.UnitTests.test_boundary_weighted_fleiss_kappa",
     "Tests.UnitTests.test_distance_based_cell_agreement",
     "Tests.UnitTests.test_icc",
-    "Tests.FeatureTests.test_icc_real_data"
+    "Tests.FeatureTests.test_icc_real_data",
+    "Tests.UnitTests.test_argparser"
 ]

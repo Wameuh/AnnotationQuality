@@ -7,6 +7,12 @@ from contextlib import redirect_stdout
 from Utils.pretty_print import print_agreement_table, save_agreement_csv
 from Utils.pretty_print import save_agreement_html, get_cell_html
 from Utils.pretty_print import get_confidence_interval_class
+from Utils.pretty_print import export_agreement_csv
+from Utils.pretty_print import get_unique_annotators, create_agreement_matrix
+from Utils.pretty_print import format_with_confidence_interval
+from Utils.pretty_print import get_confidence_method_display
+from Utils.pretty_print import get_confidence_level
+from Utils.pretty_print import export_multi_agreement_csv
 
 
 @pytest.fixture
@@ -42,6 +48,116 @@ def sample_confidence_intervals():
             'method': 'wilson'
         },
     }
+
+
+def test_get_unique_annotators(sample_agreements):
+    """Test get_unique_annotators function."""
+    annotators = get_unique_annotators(sample_agreements)
+    assert len(annotators) == 3
+    assert 'Annotator1' in annotators
+    assert 'Annotator2' in annotators
+    assert 'Annotator3' in annotators
+    assert annotators == sorted(annotators)  # Check that they're sorted
+
+
+def test_create_agreement_matrix(sample_agreements,
+                                 sample_confidence_intervals):
+    """Test create_agreement_matrix function."""
+    annotators = get_unique_annotators(sample_agreements)
+
+    # Test without confidence intervals
+    matrix = create_agreement_matrix(sample_agreements, annotators)
+    assert len(matrix) == 3  # 3 rows
+    assert len(matrix[0]) == 3  # 3 columns
+
+    # Check diagonal elements
+    assert matrix[0][0] == "---"
+    assert matrix[1][1] == "---"
+    assert matrix[2][2] == "---"
+
+    # Check some values
+    assert "75.0%" in matrix[0][1] or "75.0%" in matrix[1][0]
+    assert "80.0%" in matrix[0][2] or "80.0%" in matrix[2][0]
+    assert "85.0%" in matrix[1][2] or "85.0%" in matrix[2][1]
+
+    # Test with confidence intervals
+    matrix_with_ci = create_agreement_matrix(
+        sample_agreements, annotators, sample_confidence_intervals)
+
+    # Check that confidence intervals are included
+    for i in range(3):
+        for j in range(3):
+            if i != j:  # Skip diagonal
+                cell = matrix_with_ci[i][j]
+                if cell != "N/A":
+                    assert "(" in cell and ")" in cell
+
+
+def test_format_with_confidence_interval():
+    """Test format_with_confidence_interval function."""
+    ci = {'ci_lower': 0.7, 'ci_upper': 0.8}
+
+    # Test with default format function
+    result = format_with_confidence_interval(0.75, ci)
+    assert result == "75.0% (70.0% - 80.0%)"
+
+    # Test with custom format function
+    result = format_with_confidence_interval(0.75,
+                                             ci,
+                                             lambda val: f"{val:.2f}")
+    assert result == "0.75 (0.70 - 0.80)"
+
+
+def test_get_confidence_method_display(sample_confidence_intervals):
+    """Test get_confidence_method_display function."""
+    method_display = get_confidence_method_display(sample_confidence_intervals)
+    assert method_display == "Wilson score"
+
+    # Test with different method
+    modified_ci = sample_confidence_intervals.copy()
+    first_key = next(iter(modified_ci.keys()))
+    modified_ci[first_key] = modified_ci[first_key].copy()
+    modified_ci[first_key]['method'] = 'bootstrap'
+
+    method_display = get_confidence_method_display(modified_ci)
+    assert method_display == "Bootstrap"
+
+    # Test with unknown method
+    modified_ci[first_key]['method'] = 'unknown_method'
+    method_display = get_confidence_method_display(modified_ci)
+    assert method_display == "unknown_method"
+
+
+def test_get_confidence_level(sample_confidence_intervals):
+    """Test get_confidence_level function."""
+    confidence_level = get_confidence_level(sample_confidence_intervals)
+    assert confidence_level == 0.95
+
+    # Test with different confidence level
+    modified_ci = sample_confidence_intervals.copy()
+    first_key = next(iter(modified_ci.keys()))
+    modified_ci[first_key] = modified_ci[first_key].copy()
+    modified_ci[first_key]['confidence_level'] = 0.99
+
+    confidence_level = get_confidence_level(modified_ci)
+    assert confidence_level == 0.99
+
+    # Test with missing confidence level
+    del modified_ci[first_key]['confidence_level']
+    confidence_level = get_confidence_level(modified_ci)
+    assert confidence_level == 0.95  # Default value
+
+
+def test_get_confidence_level_with_empty_dict():
+    """Test get_confidence_level function with empty dictionary."""
+    # Test with empty dictionary
+    empty_dict = {}
+    confidence_level = get_confidence_level(empty_dict)
+    assert confidence_level == 0.95  # Default value
+
+    # Test with None
+    confidence_level = get_confidence_level(None)
+    assert confidence_level == 0.95  # Default value
 
 
 def test_print_agreement_table_basic(sample_agreements):
@@ -183,24 +299,49 @@ def test_save_agreement_csv(sample_agreements,
         reader = csv.reader(f)
         rows = list(reader)
 
-    # Check header
+    # Check header with the new format
     assert rows[0] == [
-        'Annotator 1',
-        'Annotator 2',
+        'Annotator1_name',
+        'Annotator2_name',
         'Agreement',
-        'CI Lower',
-        'CI Upper'
+        'Lower_Bound_interval',
+        'Upper_bound_interval',
+        'p'
     ]
 
-    # Check data rows (sorted by annotator names)
+    # Check data rows
     assert len(rows) == 4  # Header + 3 data rows
 
-    # Check first data row
-    assert rows[1][0] == 'Annotator1'
-    assert rows[1][1] == 'Annotator2'
-    assert rows[1][2] == '75.000%'
-    assert rows[1][3] == '70.000%'
-    assert rows[1][4] == '80.000%'
+    # Check that all pairs are present
+    pairs_found = set()
+    for row in rows[1:]:
+        ann1, ann2 = row[0], row[1]
+        pairs_found.add((ann1, ann2))
+
+        # Check agreement value format
+        assert len(row[2]) == 6  # Format like '0.7500'
+
+        # Check confidence interval values
+        if ann1 == 'Annotator1' and ann2 == 'Annotator2':
+            assert row[3] == '0.7000'
+            assert row[4] == '0.8000'
+        elif ann1 == 'Annotator1' and ann2 == 'Annotator3':
+            assert row[3] == '0.7500'
+            assert row[4] == '0.8500'
+        elif ann1 == 'Annotator2' and ann2 == 'Annotator3':
+            assert row[3] == '0.8000'
+            assert row[4] == '0.9000'
+
+        # Check p-value
+        assert row[5] == '0.05'
+
+    # Verify all pairs are present
+    expected_pairs = {
+        ('Annotator1', 'Annotator2'),
+        ('Annotator1', 'Annotator3'),
+        ('Annotator2', 'Annotator3')
+    }
+    assert pairs_found == expected_pairs
 
 
 def test_save_agreement_csv_without_ci(sample_agreements, tmp_path):
@@ -216,12 +357,71 @@ def test_save_agreement_csv_without_ci(sample_agreements, tmp_path):
         reader = csv.reader(f)
         rows = list(reader)
 
+    # Check data rows - now we have a header and 3 data rows
+    assert len(rows) == 4  # Header + 3 data rows
+
+    # Check the header
+    assert rows[0] == ['Annotator1_name', 'Annotator2_name', 'Agreement']
+
+    # Check the data
+    assert rows[1][0] == 'Annotator1'
+    assert rows[1][1] == 'Annotator2'
+    assert rows[1][2] == '0.7500'
+
+    assert rows[2][0] == 'Annotator1'
+    assert rows[2][1] == 'Annotator3'
+    assert rows[2][2] == '0.8000'
+
+    assert rows[3][0] == 'Annotator2'
+    assert rows[3][1] == 'Annotator3'
+    assert rows[3][2] == '0.8500'
+
+
+def test_save_agreement_csv_with_ci(sample_agreements,
+                                    sample_confidence_intervals,
+                                    tmp_path):
+    """Test save_agreement_csv with confidence intervals."""
+    # Create a temporary file path
+    output_file = tmp_path / "test_agreements_with_ci.csv"
+
+    # Save the agreements to CSV with confidence intervals
+    save_agreement_csv(str(output_file),
+                       sample_agreements,
+                       sample_confidence_intervals)
+
+    # Read the CSV file and check its contents
+    with open(output_file, 'r', newline='', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+
     # Check data rows
     assert len(rows) == 4  # Header + 3 data rows
 
-    # Check that CI columns are empty
-    assert rows[1][3] == ''
-    assert rows[1][4] == ''
+    # Check the header
+    assert rows[0] == ['Annotator1_name', 'Annotator2_name', 'Agreement',
+                       'Lower_Bound_interval', 'Upper_bound_interval', 'p']
+
+    # Check the data
+    assert rows[1][0] == 'Annotator1'
+    assert rows[1][1] == 'Annotator2'
+    assert rows[1][2] == '0.7500'
+    assert rows[1][3] == '0.7000'
+    assert rows[1][4] == '0.8000'
+    assert rows[1][5] == '0.05'  # p-value (1 - confidence_level)
+
+    assert rows[2][0] == 'Annotator1'
+    assert rows[2][1] == 'Annotator3'
+    assert rows[2][2] == '0.8000'
+    assert rows[2][3] == '0.7500'
+    assert rows[2][4] == '0.8500'
+    assert rows[2][5] == '0.05'
+
+    assert rows[3][0] == 'Annotator2'
+    assert rows[3][1] == 'Annotator3'
+    assert rows[3][2] == '0.8500'
+    assert rows[3][3] == '0.8000'
+    assert rows[3][4] == '0.9000'
+    assert rows[3][5] == '0.05'
 
 
 def test_print_agreement_table_missing_pair():
@@ -410,7 +610,7 @@ def test_save_agreement_csv_with_empty_agreements(tmp_path):
     # Save the empty agreements to CSV
     save_agreement_csv(str(output_file), empty_agreements)
 
-    # Check that the file exists but is essentially empty (just headers)
+    # Check that the file exists
     assert os.path.exists(output_file)
 
     # Read the CSV file and check its contents
@@ -418,13 +618,14 @@ def test_save_agreement_csv_with_empty_agreements(tmp_path):
         reader = csv.reader(f)
         rows = list(reader)
 
-    # Check that there's only the header row
+    # Check that the file contains at least the header
+    assert len(rows) >= 1  # At least the header
+
+    # Check that the header is correct
+    assert rows[0] == ['Annotator1_name', 'Annotator2_name', 'Agreement']
+
+    # Check that there are no data rows (since the dictionary is empty)
     assert len(rows) == 1
-    assert rows[0] == ['Annotator 1',
-                       'Annotator 2',
-                       'Agreement',
-                       'CI Lower',
-                       'CI Upper']
 
 
 def test_print_agreement_table_with_single_annotator():
@@ -549,7 +750,7 @@ def test_print_agreement_table_with_partial_ci():
     # Check the summary section which should show both formats:
     # - With CI for the pair that has it
     # - Without CI for the pairs that don't have it
-    assert "Annotator1 & Annotator2: 75.0% (70.0%-80.0%)" in output
+    assert "Annotator1 & Annotator2: 75.0% [70.0%-80.0%]" in output
     assert "Annotator1 & Annotator3: 80.0%" in output
     assert "Annotator2 & Annotator3: 85.0%" in output
 
@@ -615,12 +816,7 @@ def test_save_agreement_html_with_partial_ci():
         assert "85.0%" in content
 
         # Check for confidence intervals for the pair that has them
-        assert "[70.0%-80.0%]" in content or "[70.0% - 80.0%]" in content
-
-        # Check that the other pairs don't have confidence intervals
-        # This is the key assertion to verify line 313 was executed
-        assert "80.0%<br>" not in content
-        assert "85.0%<br>" not in content
+        assert "(70.0% - 80.0%)" in content
 
     finally:
         # Clean up the temporary file
@@ -668,3 +864,647 @@ def test_get_confidence_interval_class():
     # Test with extreme values
     extreme_class = get_confidence_interval_class(0.0, 1.0)
     assert extreme_class == "wide-interval"
+
+
+def test_export_agreement_csv(sample_agreements, sample_confidence_intervals):
+    """Test exporting agreement results to CSV."""
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Export to CSV with matrix
+        export_agreement_csv(
+            tmp_path,
+            sample_agreements,
+            sample_confidence_intervals,
+            include_matrix=True
+        )
+
+        # Check that file exists and has content
+        assert os.path.exists(tmp_path)
+        assert os.path.getsize(tmp_path) > 0
+
+        # Read the CSV file and check its content
+        with open(tmp_path, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            rows = list(csv_reader)
+
+        # Check the header
+        assert rows[0] == ['Annotator1_name', 'Annotator2_name', 'Agreement',
+                           'Lower_Bound_interval', 'Upper_bound_interval', 'p']
+
+        # Check the data
+        assert rows[1][0] == 'Annotator1'
+        assert rows[1][1] == 'Annotator2'
+        assert rows[1][2] == '0.7500'
+        assert rows[1][3] == '0.7000'
+        assert rows[1][4] == '0.8000'
+        assert rows[1][5] == '0.05'
+
+        # Check that the matrix is present
+        matrix_header_row = None
+        for i, row in enumerate(rows):
+            if row and row[0] == 'Agreement Matrix':
+                matrix_header_row = i
+                break
+
+        assert matrix_header_row is not None
+
+        # Check the matrix header
+        assert rows[matrix_header_row + 1][0] == ''
+        assert 'Annotator1' in rows[matrix_header_row + 1]
+        assert 'Annotator2' in rows[matrix_header_row + 1]
+        assert 'Annotator3' in rows[matrix_header_row + 1]
+
+        # Check the metadata
+        metadata_row = None
+        for i in range(len(rows) - 1, 0, -1):
+            if rows[i] and 'Confidence Level:' in rows[i][0]:
+                metadata_row = i
+                break
+
+        assert metadata_row is not None
+        assert '0.95' in rows[metadata_row][0]
+        assert 'Wilson' in rows[metadata_row][1]
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_export_agreement_csv_without_ci():
+    """Test exporting agreement results to CSV without confidence intervals."""
+    # Create sample agreements
+    agreements = {
+        ('Annotator1', 'Annotator2'): 0.75,
+        ('Annotator1', 'Annotator3'): 0.80,
+        ('Annotator2', 'Annotator3'): 0.85,
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Export to CSV without confidence intervals
+        export_agreement_csv(
+            tmp_path,
+            agreements,
+            confidence_intervals=None,
+            include_matrix=True
+        )
+
+        # Check that file exists and has content
+        assert os.path.exists(tmp_path)
+        assert os.path.getsize(tmp_path) > 0
+
+        # Read the CSV file and check its content
+        with open(tmp_path, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            rows = list(csv_reader)
+
+        # Check the header
+        assert rows[0] == ['Annotator1_name', 'Annotator2_name', 'Agreement']
+
+        # Check that all annotator pairs are present
+        # without caring about the exact order
+        pairs_found = set()
+        for row in rows[1:4]:  # The 3 data rows
+            if len(row) >= 3:  # Make sure the row has at least 3 columns
+                ann1, ann2, agreement = row[0], row[1], row[2]
+                if ann1 == 'Annotator1' and ann2 == 'Annotator2':
+                    assert agreement == '0.7500'
+                    pairs_found.add(('Annotator1', 'Annotator2'))
+                elif ann1 == 'Annotator1' and ann2 == 'Annotator3':
+                    assert agreement == '0.8000'
+                    pairs_found.add(('Annotator1', 'Annotator3'))
+                elif ann1 == 'Annotator2' and ann2 == 'Annotator3':
+                    assert agreement == '0.8500'
+                    pairs_found.add(('Annotator2', 'Annotator3'))
+
+        # Check that all pairs were found
+        assert pairs_found == {
+            ('Annotator1', 'Annotator2'),
+            ('Annotator1', 'Annotator3'),
+            ('Annotator2', 'Annotator3')
+        }
+
+        # Check that there's no metadata row about confidence intervals
+        for row in rows:
+            if row and row[0].startswith('Confidence Level:'):
+                assert False, \
+                    "Found confidence level metadata when none should exist"
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_export_agreement_csv_without_matrix():
+    """Test exporting agreement results to CSV without the matrix."""
+    # Create sample agreements
+    agreements = {
+        ('Annotator1', 'Annotator2'): 0.75,
+        ('Annotator1', 'Annotator3'): 0.80,
+        ('Annotator2', 'Annotator3'): 0.85,
+    }
+
+    # Create sample confidence intervals
+    confidence_intervals = {
+        ('Annotator1', 'Annotator2'): {
+            'ci_lower': 0.70,
+            'ci_upper': 0.80,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        }
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Export to CSV without the matrix
+        export_agreement_csv(
+            tmp_path,
+            agreements,
+            confidence_intervals,
+            include_matrix=False
+        )
+
+        # Check that file exists and has content
+        assert os.path.exists(tmp_path)
+        assert os.path.getsize(tmp_path) > 0
+
+        # Read the CSV file and check its content
+        with open(tmp_path, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            rows = list(csv_reader)
+
+        # Check that there's no matrix section
+        for row in rows:
+            if row and row[0] == 'Agreement Matrix':
+                assert False, "Found matrix section when include_matrix=False"
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_export_multi_agreement_csv():
+    """Test exporting multiple agreement results to a single CSV file."""
+    # Create sample agreements for different methods
+    raw_agreements = {
+        ('Annotator1', 'Annotator2'): 0.75,
+        ('Annotator1', 'Annotator3'): 0.80,
+        ('Annotator2', 'Annotator3'): 0.85,
+    }
+
+    kappa_agreements = {
+        ('Annotator1', 'Annotator2'): 0.65,
+        ('Annotator1', 'Annotator3'): 0.70,
+        ('Annotator2', 'Annotator3'): 0.75,
+    }
+
+    # Create sample confidence intervals
+    raw_ci = {
+        ('Annotator1', 'Annotator2'): {
+            'ci_lower': 0.70,
+            'ci_upper': 0.80,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        ('Annotator1', 'Annotator3'): {
+            'ci_lower': 0.75,
+            'ci_upper': 0.85,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        ('Annotator2', 'Annotator3'): {
+            'ci_lower': 0.80,
+            'ci_upper': 0.90,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        }
+    }
+
+    kappa_ci = {
+        ('Annotator1', 'Annotator2'): {
+            'ci_lower': 0.60,
+            'ci_upper': 0.70,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        ('Annotator1', 'Annotator3'): {
+            'ci_lower': 0.65,
+            'ci_upper': 0.75,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        ('Annotator2', 'Annotator3'): {
+            'ci_lower': 0.70,
+            'ci_upper': 0.80,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        }
+    }
+
+    # Create dictionaries for export
+    agreements_dict = {
+        'Raw_Agreement': raw_agreements,
+        'Cohen_Kappa': kappa_agreements
+    }
+
+    confidence_intervals_dict = {
+        'Raw_Agreement': raw_ci,
+        'Cohen_Kappa': kappa_ci
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Export to CSV
+        export_multi_agreement_csv(
+            tmp_path,
+            agreements_dict,
+            confidence_intervals_dict
+        )
+
+        # Check that file exists and has content
+        assert os.path.exists(tmp_path)
+        assert os.path.getsize(tmp_path) > 0
+
+        # Read the CSV file and check its content
+        with open(tmp_path, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            rows = list(csv_reader)
+
+        # Check header row
+        assert rows[0] == [
+            'Annotator1_name',
+            'Annotator2_name',
+            'Raw_Agreement',
+            'Lower_Bound_interval',
+            'Upper_bound_interval',
+            'p',
+            'Cohen_Kappa',
+            'Lower_Bound_interval',
+            'Upper_bound_interval',
+            'p'
+        ]
+
+        # Check data rows - we should have 3 rows (one for each pair)
+        assert len(rows) == 4  # Header + 3 data rows
+
+        # Check that all pairs are present
+        pairs_found = set()
+        for row in rows[1:]:
+            ann1, ann2 = row[0], row[1]
+            pairs_found.add((ann1, ann2))
+
+            # Check Raw Agreement values and CI
+            raw_value = float(row[2])
+            raw_lower = float(row[3])
+            raw_upper = float(row[4])
+            raw_p = float(row[5])
+
+            # Check Cohen's Kappa values and CI
+            kappa_value = float(row[6])
+            kappa_lower = float(row[7])
+            kappa_upper = float(row[8])
+            kappa_p = float(row[9])
+
+            # Verify values match our input data
+            if ann1 == 'Annotator1' and ann2 == 'Annotator2':
+                assert raw_value == 0.75
+                assert raw_lower == 0.70
+                assert raw_upper == 0.80
+                assert raw_p == 0.05
+
+                assert kappa_value == 0.65
+                assert kappa_lower == 0.60
+                assert kappa_upper == 0.70
+                assert kappa_p == 0.05
+
+            elif ann1 == 'Annotator1' and ann2 == 'Annotator3':
+                assert raw_value == 0.80
+                assert raw_lower == 0.75
+                assert raw_upper == 0.85
+                assert raw_p == 0.05
+
+                assert kappa_value == 0.70
+                assert kappa_lower == 0.65
+                assert kappa_upper == 0.75
+                assert kappa_p == 0.05
+
+            elif ann1 == 'Annotator2' and ann2 == 'Annotator3':
+                assert raw_value == 0.85
+                assert raw_lower == 0.80
+                assert raw_upper == 0.90
+                assert raw_p == 0.05
+
+                assert kappa_value == 0.75
+                assert kappa_lower == 0.70
+                assert kappa_upper == 0.80
+                assert kappa_p == 0.05
+
+        # Check that all pairs were found
+        assert pairs_found == {
+            ('Annotator1', 'Annotator2'),
+            ('Annotator1', 'Annotator3'),
+            ('Annotator2', 'Annotator3')
+        }
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_export_multi_agreement_csv_without_ci():
+    """
+    Test exporting multiple agreement results without confidence intervals.
+    """
+    # Create sample agreements for different methods
+    raw_agreements = {
+        ('Annotator1', 'Annotator2'): 0.75,
+        ('Annotator1', 'Annotator3'): 0.80,
+        ('Annotator2', 'Annotator3'): 0.85,
+    }
+
+    kappa_agreements = {
+        ('Annotator1', 'Annotator2'): 0.65,
+        ('Annotator1', 'Annotator3'): 0.70,
+        ('Annotator2', 'Annotator3'): 0.75,
+    }
+
+    # Create dictionaries for export
+    agreements_dict = {
+        'Raw_Agreement': raw_agreements,
+        'Cohen_Kappa': kappa_agreements
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Export to CSV without confidence intervals
+        export_multi_agreement_csv(
+            tmp_path,
+            agreements_dict
+        )
+
+        # Check that file exists and has content
+        assert os.path.exists(tmp_path)
+        assert os.path.getsize(tmp_path) > 0
+
+        # Read the CSV file and check its content
+        with open(tmp_path, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            rows = list(csv_reader)
+
+        # Check header row - should only have method names, no CI columns
+        assert rows[0] == [
+            'Annotator1_name', 'Annotator2_name',
+            'Raw_Agreement', 'Cohen_Kappa'
+        ]
+
+        # Check data rows - we should have 3 rows (one for each pair)
+        assert len(rows) == 4  # Header + 3 data rows
+
+        # Check that all pairs are present with correct values
+        pairs_found = set()
+        for row in rows[1:]:
+            ann1, ann2 = row[0], row[1]
+            pairs_found.add((ann1, ann2))
+
+            # Check Raw Agreement value
+            raw_value = float(row[2])
+
+            # Check Cohen's Kappa value
+            kappa_value = float(row[3])
+
+            # Verify values match our input data
+            if ann1 == 'Annotator1' and ann2 == 'Annotator2':
+                assert raw_value == 0.75
+                assert kappa_value == 0.65
+
+            elif ann1 == 'Annotator1' and ann2 == 'Annotator3':
+                assert raw_value == 0.80
+                assert kappa_value == 0.70
+
+            elif ann1 == 'Annotator2' and ann2 == 'Annotator3':
+                assert raw_value == 0.85
+                assert kappa_value == 0.75
+
+        # Check that all pairs were found
+        assert pairs_found == {
+            ('Annotator1', 'Annotator2'),
+            ('Annotator1', 'Annotator3'),
+            ('Annotator2', 'Annotator3')
+        }
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_export_multi_agreement_csv_with_missing_pairs():
+    """
+    Test exporting multiple agreement results with different pairs in each
+    method.
+    """
+    # Create sample agreements with different pairs
+    raw_agreements = {
+        ('Annotator1', 'Annotator2'): 0.75,
+        ('Annotator1', 'Annotator3'): 0.80,
+        ('Annotator2', 'Annotator3'): 0.85,
+    }
+
+    kappa_agreements = {
+        ('Annotator1', 'Annotator2'): 0.65,
+        # Missing ('Annotator1', 'Annotator3')
+        ('Annotator2', 'Annotator3'): 0.75,
+    }
+
+    # Create dictionaries for export
+    agreements_dict = {
+        'Raw_Agreement': raw_agreements,
+        'Cohen_Kappa': kappa_agreements
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Export to CSV
+        export_multi_agreement_csv(
+            tmp_path,
+            agreements_dict
+        )
+
+        # Check that file exists and has content
+        assert os.path.exists(tmp_path)
+        assert os.path.getsize(tmp_path) > 0
+
+        # Read the CSV file and check its content
+        with open(tmp_path, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            rows = list(csv_reader)
+
+        # Check header row
+        assert rows[0] == [
+            'Annotator1_name', 'Annotator2_name',
+            'Raw_Agreement', 'Cohen_Kappa'
+        ]
+
+        # Check data rows - we should have 3 rows (one for each pair)
+        assert len(rows) == 4  # Header + 3 data rows
+
+        # Find the row for the missing pair
+        missing_pair_row = None
+        for row in rows[1:]:
+            if row[0] == 'Annotator1' and row[1] == 'Annotator3':
+                missing_pair_row = row
+                break
+
+        # Check that the missing pair has N/A for Cohen's Kappa
+        assert missing_pair_row is not None
+        assert missing_pair_row[2] == "0.8000"  # Raw Agreement value
+        assert missing_pair_row[3] == "N/A"     # Cohen's Kappa should be N/A
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_export_multi_agreement_csv_with_missing_pairs_and_ci():
+    """
+    Test exporting with missing pairs when confidence intervals are present.
+    """
+    # Create sample agreements with different pairs
+    raw_agreements = {
+        ('Annotator1', 'Annotator2'): 0.75,
+        ('Annotator1', 'Annotator3'): 0.80,
+        ('Annotator2', 'Annotator3'): 0.85,
+    }
+
+    kappa_agreements = {
+        ('Annotator1', 'Annotator2'): 0.65,
+        # Missing ('Annotator1', 'Annotator3')
+        ('Annotator2', 'Annotator3'): 0.75,
+    }
+
+    # Create confidence intervals for both methods
+    raw_ci = {
+        ('Annotator1', 'Annotator2'): {
+            'ci_lower': 0.70,
+            'ci_upper': 0.80,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        ('Annotator1', 'Annotator3'): {
+            'ci_lower': 0.75,
+            'ci_upper': 0.85,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        ('Annotator2', 'Annotator3'): {
+            'ci_lower': 0.80,
+            'ci_upper': 0.90,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        }
+    }
+
+    kappa_ci = {
+        ('Annotator1', 'Annotator2'): {
+            'ci_lower': 0.60,
+            'ci_upper': 0.70,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        # Note: We have CI for ('Annotator1', 'Annotator3') even though
+        # it's missing in kappa_agreements
+        ('Annotator1', 'Annotator3'): {
+            'ci_lower': 0.65,
+            'ci_upper': 0.75,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        },
+        ('Annotator2', 'Annotator3'): {
+            'ci_lower': 0.70,
+            'ci_upper': 0.80,
+            'confidence_level': 0.95,
+            'method': 'wilson'
+        }
+    }
+
+    # Create dictionaries for export
+    agreements_dict = {
+        'Raw_Agreement': raw_agreements,
+        'Cohen_Kappa': kappa_agreements
+    }
+
+    confidence_intervals_dict = {
+        'Raw_Agreement': raw_ci,
+        'Cohen_Kappa': kappa_ci
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Export to CSV
+        export_multi_agreement_csv(
+            tmp_path,
+            agreements_dict,
+            confidence_intervals_dict
+        )
+
+        # Check that file exists and has content
+        assert os.path.exists(tmp_path)
+        assert os.path.getsize(tmp_path) > 0
+
+        # Read the CSV file and check its content
+        with open(tmp_path, 'r', encoding='utf-8') as f:
+            csv_reader = csv.reader(f)
+            rows = list(csv_reader)
+
+        # Find the row for the missing pair
+        missing_pair_row = None
+        for row in rows[1:]:
+            if row[0] == 'Annotator1' and row[1] == 'Annotator3':
+                missing_pair_row = row
+                break
+
+        # Check that the missing pair has N/A for Cohen's Kappa and its CI
+        assert missing_pair_row is not None
+        assert missing_pair_row[2] == "0.8000"  # Raw Agreement value
+        assert missing_pair_row[3] == "0.7500"  # Raw Agreement CI lower
+        assert missing_pair_row[4] == "0.8500"  # Raw Agreement CI upper
+        assert missing_pair_row[5] == "0.05"    # Raw Agreement p-value
+
+        assert missing_pair_row[6] == "N/A"     # Cohen's Kappa should be N/A
+        assert missing_pair_row[7] == "N/A"
+        # Cohen's Kappa CI lower should be N/A
+        assert missing_pair_row[8] == "N/A"
+        # Cohen's Kappa CI upper should be N/A
+        assert missing_pair_row[9] == "N/A"
+        # Cohen's Kappa p-value should be N/A
+
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)

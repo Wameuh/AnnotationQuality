@@ -302,7 +302,7 @@ def export_agreement_csv(
         agreements: Dict[Tuple[str, str], float],
         confidence_intervals: Dict[Tuple[str, str], Dict[str, float]] = None,
         include_matrix: bool = True
-) -> None:
+        ) -> None:
     """
     Export agreement values and confidence intervals to a CSV file.
 
@@ -324,13 +324,13 @@ def export_agreement_csv(
         # Write header row with the exact format requested
         if confidence_intervals:
             writer.writerow([
-                'Annotator1_name',
-                'Annotator2_name',
-                'Agreement',
-                'Lower_Bound_interval',
-                'Upper_bound_interval',
-                'p'
-            ])
+                    'Annotator1_name',
+                    'Annotator2_name',
+                    'Agreement',
+                    'Lower_Bound_interval',
+                    'Upper_bound_interval',
+                    'p'
+                ])
         else:
             writer.writerow([
                 'Annotator1_name',
@@ -770,7 +770,8 @@ def export_multi_agreement_csv(
                         ci = confidence_intervals_dict[method_name][pair]
                         row.append(f"{ci['ci_lower']:.4f}")
                         row.append(f"{ci['ci_upper']:.4f}")
-                        row.append(f"{1 - ci.get('confidence_level', 0.95):.2f}")
+                        row.append(
+                            f"{1 - ci.get('confidence_level', 0.95):.2f}")
                 else:
                     row.append("N/A")
                     if (confidence_intervals_dict and

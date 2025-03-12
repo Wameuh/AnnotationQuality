@@ -58,9 +58,10 @@ def parse_arguments() -> Dict[str, Any]:
 
     parser.add_argument(
         "--output-format",
-        choices=["text", "csv", "json", "html"],
+        choices=["text", "csv", "json", "html", "console"],
         default="text",
-        help="Format of the output file"
+        help=("Format of the output file (or console output if "
+              "no file specified)")
     )
 
     # Logging arguments - use -v with a number
@@ -153,7 +154,7 @@ def parse_arguments() -> Dict[str, Any]:
     advanced_group.add_argument(
         "--confidence-method",
         choices=["bootstrap", "normal", "wilson", "agresti-coull"],
-        default="bootstrap",
+        default="wilson",
         help="Method to calculate confidence intervals"
     )
 

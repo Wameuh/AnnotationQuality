@@ -31,12 +31,14 @@ def test_log_levels(logger, string_io):
     logger.info("Info message")
     logger.warning("Warning message")
     logger.error("Error message")
+    logger.critical("Critical message")
 
     output = string_io.getvalue()
     assert "DEBUG" in output
     assert "Info message" in output
     assert "Warning message" in output
     assert "Error message" in output
+    assert "Critical message" in output
 
 
 def test_log_level_filtering(string_io):

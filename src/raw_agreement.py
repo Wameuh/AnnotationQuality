@@ -1,10 +1,11 @@
 import pandas as pd
 import numpy as np
 from typing import Tuple, Dict
-from Utils.logger import LogLevel, get_logger
+from Utils.logger import get_logger
+from src.agreement_measure import AgreementMeasure
 
 
-class RawAgreement:
+class RawAgreement(AgreementMeasure):
     """
     Calculate raw agreement between annotators.
 
@@ -13,22 +14,6 @@ class RawAgreement:
     For multiple annotators, agreement means all annotators gave the same
     score.
     """
-
-    def __init__(self, level: LogLevel = LogLevel.INFO):
-        """
-        Initialize RawAgreement calculator.
-
-        Args:
-            logger (Logger, optional): Logger instance for tracking operations.
-                If None, creates a new logger.
-        """
-        # Use get_logger() to obtain the singleton instance
-        self._logger = get_logger(level)
-
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
 
     @get_logger().log_scope
     def calculate_pairwise(self,
@@ -70,7 +55,7 @@ class RawAgreement:
         return agreements
 
     @get_logger().log_scope
-    def calculate_overall(self, df: pd.DataFrame) -> float:
+    def calculate(self, df: pd.DataFrame) -> float:
         """
         Calculate overall raw agreement across all annotators.
 
@@ -85,7 +70,7 @@ class RawAgreement:
         Returns:
             float: Overall agreement score (0-1).
         """
-        self._logger.info("Calculating overall raw agreement")
+        self.logger.info("Calculating overall raw agreement")
 
         # Get score columns
         score_cols = [col for col in df.columns if col.endswith('_score')]
@@ -95,7 +80,7 @@ class RawAgreement:
 
         if len(complete_reviews) == 0:
             msg = "No reviews found with scores from all annotators"
-            self._logger.warning(msg)
+            self.logger.warning(msg)
             return 0.0
 
         # Calculate agreement (all annotators gave same score)
@@ -104,7 +89,7 @@ class RawAgreement:
         )
         overall_agreement = agreements.mean()
 
-        self._logger.info(
+        self.logger.info(
             f"Overall agreement across {len(score_cols)} annotators: "
             f"{overall_agreement:.2%}"
         )
@@ -132,14 +117,27 @@ class RawAgreement:
         pairwise_values = list(pairwise_agreements.values())
 
         stats_data = {
-            'overall_agreement': self.calculate_overall(df),
+            'overall_agreement': self.calculate(df),
             'average_pairwise': np.mean(pairwise_values),
             'min_pairwise': min(pairwise_values),
             'max_pairwise': max(pairwise_values)
         }
 
-        self._logger.info("Agreement Statistics:")
+        self.logger.info("Agreement Statistics:")
         for metric, value in stats_data.items():
-            self._logger.info(f"{metric}: {value:.2%}")
+            self.logger.info(f"{metric}: {value:.2%}")
 
         return stats_data
+
+    @get_logger().log_scope
+    def interpret_raw_agreement(self, agreement: float) -> str:
+        """
+        Interpret the raw agreement value.
+
+        Args:
+            agreement (float): Raw agreement value (between 0 and 1).
+
+        Returns:
+            str: Interpretation of the agreement value.
+        """
+        return self.interpret(agreement)

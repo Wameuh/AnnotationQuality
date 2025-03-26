@@ -127,6 +127,16 @@ def test_suite(request):
 
 
 # Common fixtures that can be used across test files
+@pytest.fixture(autouse=True)
+def reset_logger_singleton():
+    """Reset the logger singleton before and after each test."""
+    # Reset before test
+    Logger._instance = None
+    yield
+    # Reset after test
+    Logger._instance = None
+
+
 @pytest.fixture
 def logger():
     """Fixture providing a logger instance."""
@@ -203,6 +213,20 @@ def icc_calc(logger):
     """Fixture providing an ICC instance."""
     from src.icc import ICC
     return ICC(logger)
+
+
+@pytest.fixture
+def sample_input_file(tmp_path):
+    """Create a sample input file for testing."""
+    file_path = tmp_path / "sample_input.csv"
+    with open(file_path, 'w') as f:
+        f.write("id,Annotator1,Annotator2,Annotator3\n")
+        f.write("1,1,1,1\n")
+        f.write("2,2,2,2\n")
+        f.write("3,3,3,2\n")
+        f.write("4,4,4,4\n")
+        f.write("5,5,4,5\n")
+    return str(file_path)
 
 
 pytest_plugins = [

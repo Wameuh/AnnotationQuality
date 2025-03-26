@@ -1,33 +1,21 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, Union
-from Utils.logger import get_logger, LogLevel
+from typing import Dict, Union, Tuple
+from Utils.logger import get_logger
+from src.agreement_measure import AgreementMeasure
 
 
-class KrippendorffAlpha:
+class KrippendorffAlpha(AgreementMeasure):
     """
-    A class to calculate Krippendorff's Alpha coefficient.
+    A class to calculate Krippendorff's alpha coefficient.
 
-    Krippendorff's Alpha is a reliability coefficient that measures the
-    agreement among multiple annotators, taking into account chance agreement
-    and handling missing data appropriately.
+    Krippendorff's alpha is a reliability coefficient that measures the
+    agreement
+    among multiple annotators, taking into account the possibility of agreement
+    by chance.
     """
 
-    def __init__(self, level: LogLevel = LogLevel.INFO):
-        """
-        Initialize the KrippendorffAlpha calculator.
-
-        Args:
-            level (LogLevel, optional):
-                Logging level. Defaults to LogLevel.INFO.
-        """
-        self._logger = get_logger(level)
-
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
-
+    @get_logger().log_scope
     def calculate(self, df: pd.DataFrame, metric: str = 'nominal') -> float:
         """
         Calculate Krippendorff's Alpha for the given data.
@@ -282,3 +270,44 @@ class KrippendorffAlpha:
             results[f'interpretation_{metric}'] = self.interpret_alpha(alpha)
 
         return results
+
+    @get_logger().log_scope
+    def calculate_pairwise(self,
+                           df: pd.DataFrame,
+                           metric: str = 'nominal') -> Dict[Tuple[str, str],
+                                                            float]:
+        """
+        Calculate Krippendorff's Alpha for each pair of annotators.
+
+        Args:
+            df (pd.DataFrame): DataFrame with annotator scores as columns.
+            metric (str, optional): Distance metric to use.
+                Defaults to 'nominal'.
+
+        Returns:
+            Dict[Tuple[str, str], float]: Dictionary with annotator pairs as
+                keys and alpha values as values.
+        """
+        self.logger.info("Calculating pairwise Krippendorff's Alpha values")
+
+        pairwise_alphas = {}
+        columns = df.columns
+        n_annotators = len(columns)
+
+        for i in range(n_annotators):
+            for j in range(i + 1, n_annotators):
+                # Select only the two annotators
+                pair_df = df[[columns[i], columns[j]]].copy()
+
+                # Calculate alpha for this pair
+                alpha = self.calculate(pair_df, metric)
+
+                # Store result with annotator names as key
+                pair_key = (columns[i], columns[j])
+                pairwise_alphas[pair_key] = alpha
+
+                self.logger.debug(
+                    f"Alpha between {columns[i]} and {columns[j]}"
+                    f": {alpha:.4f}")
+
+        return pairwise_alphas

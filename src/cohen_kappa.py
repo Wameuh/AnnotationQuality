@@ -1,10 +1,11 @@
 import pandas as pd
 import numpy as np
 from typing import Dict, Tuple
-from Utils.logger import get_logger, LogLevel
+from Utils.logger import get_logger
+from src.agreement_measure import AgreementMeasure
 
 
-class CohenKappa:
+class CohenKappa(AgreementMeasure):
     """
     Calculate Cohen's Kappa agreement between annotators.
 
@@ -12,21 +13,28 @@ class CohenKappa:
     taking into account the agreement that would be expected by chance.
     """
 
-    def __init__(self, level: LogLevel = LogLevel.INFO):
+    @get_logger().log_scope
+    def calculate(self, df: pd.DataFrame) -> float:
         """
-        Initialize CohenKappa calculator.
+        Calculate average Cohen's Kappa across all annotator pairs.
 
         Args:
-            level (LogLevel, optional): Logging level.
-                Defaults to LogLevel.INFO.
-        """
-        # Use get_logger() to obtain the singleton instance
-        self._logger = get_logger(level)
+            df (pd.DataFrame): DataFrame with annotator scores as columns.
 
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
+        Returns:
+            float: Average Cohen's Kappa value.
+        """
+        # Calculate pairwise kappas
+        pairwise_kappas = self.calculate_pairwise(df)
+
+        # Return average kappa
+        if not pairwise_kappas:
+            self.logger.warning("No valid annotator pairs found")
+            return 0.0
+
+        avg_kappa = np.mean(list(pairwise_kappas.values()))
+        self.logger.info(f"Average Cohen's Kappa: {avg_kappa:.4f}")
+        return avg_kappa
 
     @get_logger().log_scope
     def calculate_pairwise(self,
@@ -52,7 +60,7 @@ class CohenKappa:
                 pair_df = df[[f"{ann1}_score", f"{ann2}_score"]].dropna()
 
                 if len(pair_df) == 0:
-                    self._logger.warning(
+                    self.logger.warning(
                         f"No complete reviews found for {ann1} and {ann2}")
                     continue
 
@@ -63,62 +71,61 @@ class CohenKappa:
                 )
 
                 kappas[(ann1, ann2)] = kappa
-
-                self._logger.info(
-                    f"Cohen's Kappa between {ann1} and {ann2}: "
-                    f"{kappa:.2f}"
-                )
+                self.logger.info(
+                    f"Cohen's Kappa for {ann1} and {ann2}: {kappa:.4f}")
 
         return kappas
 
     @get_logger().log_scope
-    def _calculate_kappa(self, a: np.ndarray, b: np.ndarray) -> float:
+    def _calculate_kappa(self, ratings1: np.ndarray,
+                         ratings2: np.ndarray) -> float:
         """
-        Calculate Cohen's Kappa for two annotators.
+        Calculate Cohen's Kappa for two sets of ratings.
 
         Args:
-            a (np.ndarray): Scores from first annotator.
-            b (np.ndarray): Scores from second annotator.
+            ratings1 (np.ndarray): First set of ratings.
+            ratings2 (np.ndarray): Second set of ratings.
 
         Returns:
             float: Cohen's Kappa value.
         """
-        if len(a) != len(b):
-            raise ValueError("Arrays must have the same length")
+        if len(ratings1) != len(ratings2):
+            raise ValueError("Rating arrays must have the same length")
 
-        # Get unique categories from both annotators
-        categories = sorted(set(np.concatenate((a, b))))
+        if len(ratings1) == 0:
+            self.logger.warning("No ratings provided")
+            return 0.0
+
+        # Get unique categories
+        categories = sorted(set(np.concatenate([ratings1, ratings2])))
         n_categories = len(categories)
 
         # Create confusion matrix
         confusion_matrix = np.zeros((n_categories, n_categories))
-        for i, j in zip(a, b):
-            i_idx = categories.index(i)
-            j_idx = categories.index(j)
-            confusion_matrix[i_idx, j_idx] += 1
+        for i in range(len(ratings1)):
+            # Find indices for the categories
+            idx1 = categories.index(ratings1[i])
+            idx2 = categories.index(ratings2[i])
+            confusion_matrix[idx1, idx2] += 1
 
         # Calculate observed agreement
-        observed_agreement = (
-            np.sum(np.diag(confusion_matrix)) / np.sum(confusion_matrix)
-        )
+        observed_agreement = np.sum(np.diag(confusion_matrix)) / np.sum(
+            confusion_matrix)
 
         # Calculate expected agreement
         row_sums = np.sum(confusion_matrix, axis=1)
         col_sums = np.sum(confusion_matrix, axis=0)
-        expected_agreement = (
-            np.sum(row_sums * col_sums) / (np.sum(confusion_matrix) ** 2)
-        )
+        expected_agreement = np.sum(
+            row_sums * col_sums) / (np.sum(confusion_matrix) ** 2)
 
         # Calculate Cohen's Kappa
-        if expected_agreement == 1:
+        if expected_agreement == 1.0:
             # If expected agreement is 1, kappa is undefined
             # In this case, return 1 if observed agreement is 1, else 0
             return 1.0 if observed_agreement == 1 else 0.0
 
-        kappa = (
-            (observed_agreement - expected_agreement)
-            / (1 - expected_agreement)
-        )
+        kappa = (observed_agreement - expected_agreement) / (
+            1.0 - expected_agreement)
 
         return kappa
 
@@ -140,7 +147,7 @@ class CohenKappa:
         kappa_values = list(pairwise_kappas.values())
 
         if not kappa_values:
-            self._logger.warning("No valid kappa values calculated")
+            self.logger.warning("No valid kappa values calculated")
             return {
                 'average_kappa': 0.0,
                 'min_kappa': 0.0,
@@ -153,9 +160,9 @@ class CohenKappa:
             'max_kappa': max(kappa_values)
         }
 
-        self._logger.info("Cohen's Kappa Statistics:")
+        self.logger.info("Cohen's Kappa Statistics:")
         for metric, value in stats_data.items():
-            self._logger.info(f"{metric}: {value:.2f}")
+            self.logger.info(f"{metric}: {value:.2f}")
 
         return stats_data
 
@@ -170,15 +177,4 @@ class CohenKappa:
         Returns:
             str: Interpretation of the kappa value.
         """
-        if kappa < 0:
-            return "Poor agreement (less than chance)"
-        elif kappa < 0.2:
-            return "Slight agreement"
-        elif kappa < 0.4:
-            return "Fair agreement"
-        elif kappa < 0.6:
-            return "Moderate agreement"
-        elif kappa < 0.8:
-            return "Substantial agreement"
-        else:
-            return "Almost perfect agreement"
+        return self.interpret(kappa)

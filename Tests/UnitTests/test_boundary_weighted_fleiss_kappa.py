@@ -310,3 +310,129 @@ def test_calculate_with_chance_agreement_one(bwfk_calculator):
 
     # When chance agreement is 1.0, BWFK should be 0.0
     assert bwfk == 0.0
+
+
+def test_calculate_pairwise(bwfk_calculator, perfect_agreement_segmentations):
+    """Test calculate_pairwise method with perfect agreement."""
+    # Create a DataFrame from the segmentations
+    df = pd.DataFrame({
+        'Annotator1': [perfect_agreement_segmentations[0]],
+        'Annotator2': [perfect_agreement_segmentations[1]],
+        'Annotator3': [perfect_agreement_segmentations[2]]
+    })
+
+    # Calculate pairwise BWFKs
+    pairwise_bwfks = bwfk_calculator.calculate_pairwise(df)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_bwfks, dict)
+
+    # Check that all pairs are present
+    columns = df.columns
+    n_annotators = len(columns)
+    expected_pairs_count = (n_annotators * (n_annotators - 1)) // 2
+    assert len(pairwise_bwfks) == expected_pairs_count
+
+    # Check that values are between -1 and 1
+    for k, v in pairwise_bwfks.items():
+        assert isinstance(k, tuple)
+        assert len(k) == 2
+        assert -1.0 <= v <= 1.0
+
+    # With perfect agreement, BWFK should be 1.0
+    for v in pairwise_bwfks.values():
+        assert v == 1.0
+
+
+def test_calculate_pairwise_with_boundary_differences(
+        bwfk_calculator, high_agreement_segmentations):
+    """Test calculate_pairwise method with boundary differences."""
+    # Create a DataFrame from the segmentations
+    df = pd.DataFrame({
+        'Annotator1': [high_agreement_segmentations[0]],
+        'Annotator2': [high_agreement_segmentations[1]],
+        'Annotator3': [high_agreement_segmentations[2]]
+    })
+
+    # Calculate pairwise BWFKs
+    pairwise_bwfks = bwfk_calculator.calculate_pairwise(df)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_bwfks, dict)
+
+    # Check that values are between -1 and 1
+    for v in pairwise_bwfks.values():
+        assert -1.0 <= v <= 1.0
+
+    # With high agreement (but not perfect), BWFK should be positive but less '
+    # than 1.0
+    for v in pairwise_bwfks.values():
+        assert 0.0 < v < 1.0
+
+
+def test_calculate_pairwise_with_missing_data(bwfk_calculator):
+    """Test calculate_pairwise method with missing data."""
+    # Create a DataFrame with missing values
+    data = {
+        'Annotator1': [np.zeros((5, 5))],
+        'Annotator2': [np.ones((5, 5))],
+        'Annotator3': [None]  # Missing data
+    }
+    df = pd.DataFrame(data)
+
+    # Calculate pairwise BWFKs
+    pairwise_bwfks = bwfk_calculator.calculate_pairwise(df)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_bwfks, dict)
+
+    # Check that pairs with valid data are present
+    assert ('Annotator1', 'Annotator2') in pairwise_bwfks
+
+    # Check that pairs with missing data are not present
+    assert ('Annotator1', 'Annotator3') not in pairwise_bwfks
+    assert ('Annotator2', 'Annotator3') not in pairwise_bwfks
+
+
+def test_calculate_pairwise_with_non_binary_masks(bwfk_calculator):
+    """Test calculate_pairwise method with non-binary masks."""
+    # Create a DataFrame with non-binary masks
+    data = {
+        'Annotator1': [np.zeros((5, 5))],  # Binary mask (all 0s)
+        'Annotator2': [np.ones((5, 5)) * 2]  # Non-binary mask (all 2s)
+    }
+    df = pd.DataFrame(data)
+
+    # Calculate pairwise BWFKs
+    pairwise_bwfks = bwfk_calculator.calculate_pairwise(df)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_bwfks, dict)
+
+    # Check that no pairs are present (all were skipped due to non-binary
+    # masks)
+    assert len(pairwise_bwfks) == 0
+
+
+def test_calculate_pairwise_with_exception(bwfk_calculator, monkeypatch):
+    """Test calculate_pairwise method when calculate raises an exception."""
+    # Create a DataFrame with valid data
+    data = {
+        'Annotator1': [np.zeros((5, 5))],
+        'Annotator2': [np.ones((5, 5))]
+    }
+    df = pd.DataFrame(data)
+
+    # Define a mock calculate method that raises an exception
+    def mock_calculate(*args, **kwargs):
+        raise ValueError("Forced error in calculate method")
+
+    # Replace the calculate method with our mock
+    monkeypatch.setattr(bwfk_calculator, "calculate", mock_calculate)
+
+    # Calculate pairwise BWFKs
+    pairwise_bwfks = bwfk_calculator.calculate_pairwise(df)
+
+    # Check that result is an empty dictionary (no successful calculations)
+    assert isinstance(pairwise_bwfks, dict)
+    assert len(pairwise_bwfks) == 0

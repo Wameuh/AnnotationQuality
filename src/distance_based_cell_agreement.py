@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, List
-from Utils.logger import get_logger, LogLevel
+from typing import Dict, List, Tuple
+from Utils.logger import get_logger
 from scipy.spatial.distance import cdist
 from scipy.optimize import linear_sum_assignment
+from src.agreement_measure import AgreementMeasure
 
 
-class DistanceBasedCellAgreement:
+class DistanceBasedCellAgreement(AgreementMeasure):
     """
     A class to calculate Distance-Based Cell Agreement Algorithm (DBCAA).
 
@@ -15,26 +16,12 @@ class DistanceBasedCellAgreement:
     distances between cells detected by different annotators.
     """
 
-    def __init__(self, level: LogLevel = LogLevel.INFO):
-        """
-        Initialize the DistanceBasedCellAgreement calculator.
-
-        Args:
-            level (LogLevel, optional):
-                Logging level. Defaults to LogLevel.INFO.
-        """
-        self._logger = get_logger(level)
-
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
-
+    @get_logger().log_scope
     def calculate(self,
                   cell_positions: List[np.ndarray],
                   distance_threshold: float = 10.0) -> float:
         """
-        Calculate the Distance-Based Cell Agreement score.
+        Calculate DBCAA for cell detection data.
 
         Args:
             cell_positions (List[np.ndarray]): List of arrays containing cell
@@ -44,99 +31,104 @@ class DistanceBasedCellAgreement:
                 for two cells to be considered matching. Defaults to 10.0.
 
         Returns:
-            float: DBCAA score between 0 and 1
+            float: DBCAA value (0 to 1)
         """
         self.logger.info("Calculating Distance-Based Cell Agreement")
 
         # Validate inputs
         if not cell_positions:
-            raise ValueError("No cell positions provided")
+            raise ValueError("No cell position data provided")
 
-        if len(cell_positions) < 2:
+        if not all(isinstance(pos, np.ndarray) for pos in cell_positions):
+            raise ValueError("All cell positions must be numpy arrays")
+
+        if not all(
+            pos.shape[1] == 2 for pos in cell_positions if len(pos) > 0
+                   ):
             raise ValueError(
-                "At least two sets of cell positions are required")
+                "Cell position arrays must have shape (n_cells, 2)")
 
-        for i, positions in enumerate(cell_positions):
-            if not isinstance(positions, np.ndarray):
-                raise ValueError(f"Cell positions {i} must be a numpy array")
-
-            if positions.ndim != 2 or positions.shape[1] != 2:
-                raise ValueError(
-                    f"Cell positions {i} must have shape (n_cells, 2)")
-
-        # Calculate pairwise agreement scores
+        # Calculate pairwise agreement
         n_annotators = len(cell_positions)
-        agreement_scores = []
+        pairwise_agreements = []
 
         for i in range(n_annotators):
-            for j in range(i+1, n_annotators):
-                score = self._calculate_pairwise_agreement(
-                    cell_positions[i],
-                    cell_positions[j],
-                    distance_threshold
-                )
-                agreement_scores.append(score)
+            for j in range(i + 1, n_annotators):
+                agreement = self._calculate_pairwise_agreement(
+                    cell_positions[i], cell_positions[j], distance_threshold)
+                pairwise_agreements.append(agreement)
+                self.logger.debug(
+                    f"Agreement between annotator {i} and {j}:"
+                    f" {agreement:.4f}")
 
-        # Return average agreement score
-        return np.mean(agreement_scores)
+        # Calculate overall agreement as average of pairwise agreements
+        if not pairwise_agreements:
+            self.logger.warning("No valid pairs for agreement calculation")
+            return 0.0
 
+        overall_agreement = np.mean(pairwise_agreements)
+        self.logger.info(f"Overall DBCAA: {overall_agreement:.4f}")
+
+        return overall_agreement
+
+    @get_logger().log_scope
     def _calculate_pairwise_agreement(self,
-                                      cells1: np.ndarray,
-                                      cells2: np.ndarray,
-                                      distance_threshold: float) -> float:
+                                      cells1,
+                                      cells2,
+                                      distance_threshold=10.0):
         """
-        Calculate agreement score between two sets of cell positions.
+        Calculate agreement between two sets of cell positions.
 
         Args:
-            cells1 (np.ndarray): First set of cell positions, shape (n1, 2)
-            cells2 (np.ndarray): Second set of cell positions, shape (n2, 2)
-            distance_threshold (float): Maximum distance for matching
+            cells1 (np.ndarray): First set of cell positions,
+                                    shape (n_cells, 2)
+            cells2 (np.ndarray): Second set of cell positions,
+                                    shape (m_cells, 2)
+            distance_threshold (float): Maximum distance for cells to be
+            considered matching
 
         Returns:
             float: Agreement score between 0 and 1
         """
         # Handle empty arrays
-        if cells1.shape[0] == 0 and cells2.shape[0] == 0:
+        if len(cells1) == 0 and len(cells2) == 0:
             return 1.0  # Perfect agreement if both are empty
-
-        if cells1.shape[0] == 0 or cells2.shape[0] == 0:
+        if len(cells1) == 0 or len(cells2) == 0:
             return 0.0  # No agreement if one is empty
 
-        # Calculate distance matrix between all pairs of cells
-        distance_matrix = cdist(cells1, cells2, metric='euclidean')
+        # Calculate pairwise distances between all cells
+        distances = cdist(cells1, cells2)
 
         # Find optimal assignment (Hungarian algorithm)
-        row_indices, col_indices = linear_sum_assignment(distance_matrix)
+        row_ind, col_ind = linear_sum_assignment(distances)
 
-        # Count matches (cells within threshold distance)
+        # Count matches (cells within threshold)
         matches = sum(
-            distance_matrix[row_indices, col_indices] <= distance_threshold)
+            distances[row_ind[i], col_ind[i]] <= distance_threshold
+            for i in range(len(row_ind)))
 
-        # Calculate F1-score (harmonic mean of precision and recall)
-        precision = matches / cells1.shape[0]
-        recall = matches / cells2.shape[0]
+        # Calculate agreement as proportion of matches to total cells
+        total_cells = max(len(cells1), len(cells2))
+        agreement = matches / total_cells
 
-        if precision + recall == 0:
-            return 0.0
+        return agreement
 
-        f1_score = 2 * (precision * recall) / (precision + recall)
-        return f1_score
-
+    @get_logger().log_scope
     def calculate_from_dataframe(self,
                                  df: pd.DataFrame,
                                  distance_threshold: float = 10.0) -> float:
         """
-        Calculate DBCAA from a DataFrame containing cell positions.
+        Calculate DBCAA from a DataFrame containing cell position data.
 
         Args:
-            df (pd.DataFrame): DataFrame where each column is an annotator and
-                each row contains cell position as "x,y" string or tuple.
+            df (pd.DataFrame): DataFrame with annotator cell positions.
+                Expected format: Each column represents an annotator's data,
+                with each cell containing a list of (x, y) coordinates.
             distance_threshold (float, optional): Maximum distance for
-                matching.
-                Defaults to 10.0.
+                matching. Defaults to 10.0.
 
         Returns:
-            float: DBCAA score between 0 and 1
+            float: DBCAA value (0 to 1)
         """
         self.logger.info("Calculating DBCAA from DataFrame")
 
@@ -145,60 +137,52 @@ class DistanceBasedCellAgreement:
         invalid_count = 0
 
         for col in df.columns:
-            # Extract non-null positions
-            positions = df[col].dropna().values
+            try:
+                # Filter out None values and convert to numpy array
+                valid_positions = [
+                    pos for pos in df[col].tolist() if pos is not None]
+                positions = np.array(valid_positions)
 
-            # Convert string positions to coordinates if needed
-            coords = []
-            col_invalid_count = 0
+                # Check for NaN values
+                if np.isnan(positions).any():
+                    self.logger.warning(
+                        f"NaN values found in column {col}, "
+                        "filtering them out")
+                    positions = positions[~np.isnan(positions).any(axis=1)]
 
-            for pos in positions:
-                try:
-                    if isinstance(pos, str) and ',' in pos:
-                        # Assume format "x,y"
-                        x, y = map(float, pos.split(','))
-                        coords.append([x, y])
-                    elif isinstance(pos, tuple) and len(pos) == 2:
-                        coords.append([float(pos[0]), float(pos[1])])
-                    else:
-                        col_invalid_count += 1
-                except (ValueError, TypeError):
-                    col_invalid_count += 1
-
-            if col_invalid_count > 0:
-                self.logger.warning(
-                    f"Skipped {col_invalid_count} invalid"
-                    f" positions in column {col}")
-                invalid_count += col_invalid_count
-
-            if coords:  # Only add if there are valid coordinates
-                cell_positions.append(np.array(coords))
+                cell_positions.append(positions)
+            except Exception as e:
+                self.logger.warning(f"Error processing column {col}: {e}")
+                invalid_count += 1
+                # Add an empty array for this annotator
+                cell_positions.append(np.array([]).reshape(0, 2))
 
         if invalid_count > 0:
-            self.logger.warning(
-                f"Skipped a total of {invalid_count} invalid "
-                f"positions across all columns")
+            self.logger.warning(f"Skipped {invalid_count} invalid columns")
 
         # Calculate DBCAA
-        if len(cell_positions) < 2:
-            self.logger.warning(
-                "Not enough valid annotators with cell positions")
-            return 0.0
-
         return self.calculate(cell_positions, distance_threshold)
 
+    @get_logger().log_scope
     def interpret_dbcaa(self, dbcaa: float) -> str:
         """
-        Interpret the DBCAA value.
+        Interpret the DBCAA value according to guidelines specific to this
+            measure.
 
         Args:
-            dbcaa (float): DBCAA value.
+            dbcaa (float): DBCAA value (typically between 0 and 1).
 
         Returns:
             str: Interpretation of the DBCAA value.
         """
-        if dbcaa < 0.2:
-            return "Poor agreement"
+        # DBCAA values are normally between 0 and 1
+        # 0 represents random agreement or no agreement
+        if dbcaa < 0:
+            return "Invalid DBCAA value (should be non-negative)"
+        elif dbcaa < 0.1:
+            return "Poor agreement (close to random)"
+        elif dbcaa < 0.2:
+            return "Slight agreement"
         elif dbcaa < 0.4:
             return "Fair agreement"
         elif dbcaa < 0.6:
@@ -208,10 +192,11 @@ class DistanceBasedCellAgreement:
         else:
             return "Almost perfect agreement"
 
+    @get_logger().log_scope
     def get_dbcaa_statistics(self,
                              cell_positions: List[np.ndarray],
                              distance_thresholds:
-                             List[float] = [5.0, 10.0, 15.0, 20.0]
+                             List[float] = [5.0, 10.0, 15.0]
                              ) -> Dict[str, float]:
         """
         Calculate DBCAA with different distance thresholds and
@@ -243,3 +228,107 @@ class DistanceBasedCellAgreement:
                 self.interpret_dbcaa(dbcaa)
 
         return results
+
+    @get_logger().log_scope
+    def calculate_pairwise(self,
+                           df: pd.DataFrame,
+                           threshold=10.0) -> Dict[Tuple[str, str], float]:
+        """
+        Calculate Distance-Based Cell Agreement for each pair of annotators.
+
+        Args:
+            df (pd.DataFrame): DataFrame with annotator scores as columns.
+            threshold (float): Distance threshold for matching cells.
+
+        Returns:
+            Dict[Tuple[str, str], float]: Dictionary with annotator pairs as
+                keys and DBCAA values as values.
+        """
+        self.logger.info(
+            "Calculating pairwise Distance-Based Cell Agreement values")
+
+        pairwise_dbcaas = {}
+        columns = df.columns
+        n_annotators = len(columns)
+
+        for i in range(n_annotators):
+            for j in range(i + 1, n_annotators):
+                # Select only the two annotators
+                pair_df = df[[columns[i], columns[j]]].copy()
+
+                # Drop rows with missing values
+                pair_df = pair_df.dropna()
+
+                if len(pair_df) == 0:
+                    self.logger.warning(
+                        f"No valid data for pair {columns[i]} and "
+                        f"{columns[j]}")
+                    continue
+
+                try:
+                    # Extract cell coordinates
+                    if isinstance(pair_df[columns[i]].iloc[0], str):
+                        # If the data is stored as strings, parse them
+                        cells1 = self._extract_cell_coordinates(
+                            pair_df[columns[i]].iloc[0])
+                        cells2 = self._extract_cell_coordinates(
+                            pair_df[columns[j]].iloc[0])
+                    else:
+                        # If the data is already numpy arrays,use them directly
+                        cells1 = pair_df[columns[i]].iloc[0]
+                        cells2 = pair_df[columns[j]].iloc[0]
+
+                    # Calculate agreement using the correct method
+                    dbcaa = self._calculate_pairwise_agreement(cells1,
+                                                               cells2,
+                                                               threshold)
+
+                    # Store result with annotator names as key
+                    pair_key = (columns[i], columns[j])
+                    pairwise_dbcaas[pair_key] = dbcaa
+
+                    self.logger.debug(
+                        f"DBCAA between {columns[i]} and {columns[j]}: "
+                        f"{dbcaa:.4f}")
+                except Exception as e:
+                    self.logger.warning(
+                        f"Error calculating DBCAA for pair {columns[i]} and "
+                        f"{columns[j]}: {str(e)}")
+                    continue
+
+        return pairwise_dbcaas
+
+    @get_logger().log_scope
+    def _extract_cell_coordinates(self, cell_str):
+        """
+        Extract cell coordinates from a string representation.
+
+        Args:
+            cell_str (str): String representation of cell coordinates,
+                e.g., "10,10;20,20;30,30"
+
+        Returns:
+            np.ndarray: Array of cell coordinates with shape (n_cells, 2)
+        """
+        if not cell_str or not isinstance(cell_str, str):
+            return np.array([]).reshape(0, 2)
+
+        try:
+            # Split the string by semicolons to get individual cell coordinates
+            cells = cell_str.split(';')
+
+            # Parse each cell coordinate
+            coordinates = []
+            for cell in cells:
+                if ',' in cell:
+                    try:
+                        x, y = cell.split(',')
+                        coordinates.append([float(x), float(y)])
+                    except ValueError:
+                        # Skip invalid coordinates
+                        continue
+
+            return np.array(coordinates)
+        except Exception as e:
+            self.logger.warning(f"Error extracting cell coordinates: {str(e)}")
+            return np.array([]).reshape(0, 2)

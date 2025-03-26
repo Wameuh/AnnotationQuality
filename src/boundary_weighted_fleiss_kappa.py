@@ -1,12 +1,13 @@
 import numpy as np
 import pandas as pd
 from typing import Dict, Tuple, List
-from Utils.logger import get_logger, LogLevel
+from Utils.logger import get_logger
 from scipy.ndimage import binary_dilation, binary_erosion
 from scipy.ndimage import generate_binary_structure
+from src.agreement_measure import AgreementMeasure
 
 
-class BoundaryWeightedFleissKappa:
+class BoundaryWeightedFleissKappa(AgreementMeasure):
     """
     A class to calculate Boundary-Weighted Fleiss' Kappa (BWFK).
 
@@ -16,21 +17,7 @@ class BoundaryWeightedFleissKappa:
     or other spatial annotation tasks.
     """
 
-    def __init__(self, level: LogLevel = LogLevel.INFO):
-        """
-        Initialize the BoundaryWeightedFleissKappa calculator.
-
-        Args:
-            level (LogLevel, optional):
-                    Logging level. Defaults to LogLevel.INFO.
-        """
-        self._logger = get_logger(level)
-
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
-
+    @get_logger().log_scope
     def calculate(self,
                   segmentations: List[np.ndarray],
                   boundary_width: int = 2,
@@ -110,6 +97,7 @@ class BoundaryWeightedFleissKappa:
 
         return kappa
 
+    @get_logger().log_scope
     def _get_boundary_mask(self,
                            segmentation: np.ndarray,
                            width: int) -> np.ndarray:
@@ -135,6 +123,7 @@ class BoundaryWeightedFleissKappa:
 
         return boundary
 
+    @get_logger().log_scope
     def _calculate_weighted_observed_agreement(self,
                                                segmentations: List[np.ndarray],
                                                weights: np.ndarray) -> float:
@@ -179,6 +168,7 @@ class BoundaryWeightedFleissKappa:
 
         return normalized_agreement
 
+    @get_logger().log_scope
     def _calculate_weighted_chance_agreement(self,
                                              segmentations: List[np.ndarray],
                                              weights: np.ndarray) -> float:
@@ -212,6 +202,7 @@ class BoundaryWeightedFleissKappa:
 
         return weighted_chance
 
+    @get_logger().log_scope
     def calculate_from_dataframe(self,
                                  df: pd.DataFrame,
                                  image_shape: Tuple[int, int],
@@ -246,6 +237,7 @@ class BoundaryWeightedFleissKappa:
         # Calculate BWFK
         return self.calculate(segmentations, boundary_width, weight_factor)
 
+    @get_logger().log_scope
     def interpret_bwfk(self, bwfk: float) -> str:
         """
         Interpret the BWFK value.
@@ -256,19 +248,9 @@ class BoundaryWeightedFleissKappa:
         Returns:
             str: Interpretation of the BWFK value.
         """
-        if bwfk < 0:
-            return "Poor agreement (worse than chance)"
-        elif bwfk < 0.2:
-            return "Slight agreement"
-        elif bwfk < 0.4:
-            return "Fair agreement"
-        elif bwfk < 0.6:
-            return "Moderate agreement"
-        elif bwfk < 0.8:
-            return "Substantial agreement"
-        else:
-            return "Almost perfect agreement"
+        return self.interpret(bwfk)
 
+    @get_logger().log_scope
     def get_bwfk_statistics(self,
                             segmentations: List[np.ndarray],
                             boundary_widths: List[int] = [1, 2, 3, 5],
@@ -313,3 +295,73 @@ class BoundaryWeightedFleissKappa:
                 self.interpret_bwfk(bwfk)
 
         return results
+
+    @get_logger().log_scope
+    def calculate_pairwise(self,
+                           df: pd.DataFrame,
+                           width=5) -> Dict[Tuple[str, str], float]:
+        """
+        Calculate Boundary-Weighted Fleiss' Kappa for each pair of annotators.
+
+        Args:
+            df (pd.DataFrame): DataFrame with annotator scores as columns.
+            width (int): Width of the boundary region in pixels.
+
+        Returns:
+            Dict[Tuple[str, str], float]: Dictionary with annotator pairs as
+                keys and BWFK values as values.
+        """
+        self.logger.info(
+            "Calculating pairwise Boundary-Weighted Fleiss' Kappa values")
+
+        pairwise_bwfks = {}
+        columns = df.columns
+        n_annotators = len(columns)
+
+        for i in range(n_annotators):
+            for j in range(i + 1, n_annotators):
+                # Select only the two annotators
+                pair_df = df[[columns[i], columns[j]]].copy()
+
+                # Drop rows with missing values
+                pair_df = pair_df.dropna()
+
+                if len(pair_df) == 0:
+                    self.logger.warning(
+                        f"No valid data for pair {columns[i]} and "
+                        f"{columns[j]}")
+                    continue
+
+                # For binary segmentation masks, we can calculate BWFK directly
+                try:
+                    # Extract segmentation masks from the DataFrame
+                    # Assuming each cell contains a numpy array
+                    mask1 = pair_df[columns[i]].iloc[0]
+                    mask2 = pair_df[columns[j]].iloc[0]
+
+                    # Check if masks are binary (contains only 0 and 1)
+                    if (not np.all(np.isin(np.unique(mask1), [0, 1])) or
+                            not np.all(np.isin(np.unique(mask2), [0, 1]))):
+                        self.logger.warning(
+                            f"Non-binary masks for pair {columns[i]} and "
+                            f"{columns[j]}")
+                        continue
+
+                    # Calculate BWFK for this pair using the calculate method
+                    # We pass a list of the two segmentation masks
+                    bwfk = self.calculate([mask1, mask2], boundary_width=width)
+
+                    # Store result with annotator names as key
+                    pair_key = (columns[i], columns[j])
+                    pairwise_bwfks[pair_key] = bwfk
+
+                    self.logger.debug(
+                        f"BWFK between {columns[i]} and {columns[j]}: "
+                        f"{bwfk:.4f}")
+                except Exception as e:
+                    self.logger.warning(
+                        f"Error calculating BWFK for pair {columns[i]} and "
+                        f"{columns[j]}: {str(e)}")
+                    continue
+
+        return pairwise_bwfks

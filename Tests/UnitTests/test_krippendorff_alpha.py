@@ -335,3 +335,141 @@ def test_calculate_with_zero_expected_disagreement(alpha_calculator):
     assert alpha_calculator.calculate(df, 'ordinal') == 1.0
     assert alpha_calculator.calculate(df, 'interval') == 1.0
     assert alpha_calculator.calculate(df, 'ratio') == 1.0
+
+
+def test_calculate_pairwise(alpha_calculator):
+    """Test calculate_pairwise method."""
+    # Create test data with high agreement between some annotators
+    data = {
+        'Annotator1': [1, 2, 3, 4, 5],
+        'Annotator2': [1, 2, 3, 4, 5],  # Perfect agreement with Annotator1
+        'Annotator3': [2, 3, 4, 5, 1],  # Low agreement with others
+        'Annotator4': [1, 2, 3, 4, 4]   # High agreement with Annotator1 and
+                                        #   Annotator2
+    }
+    df = pd.DataFrame(data)
+
+    # Calculate pairwise alphas
+    pairwise_alphas = alpha_calculator.calculate_pairwise(df)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_alphas, dict)
+
+    # Check that all pairs are present
+    expected_pairs = [
+        ('Annotator1', 'Annotator2'),
+        ('Annotator1', 'Annotator3'),
+        ('Annotator1', 'Annotator4'),
+        ('Annotator2', 'Annotator3'),
+        ('Annotator2', 'Annotator4'),
+        ('Annotator3', 'Annotator4')
+    ]
+    for pair in expected_pairs:
+        assert pair in pairwise_alphas
+
+    # Check that values are between -1 and 1
+    for alpha in pairwise_alphas.values():
+        assert -1.0 <= alpha <= 1.0
+
+    # Check specific relationships
+    # Perfect agreement should have alpha = 1.0
+    assert pairwise_alphas[('Annotator1', 'Annotator2')] == 1.0
+
+    # Lower agreement should have lower alpha
+    assert pairwise_alphas[('Annotator1', 'Annotator3')] < \
+        pairwise_alphas[('Annotator1', 'Annotator2')]
+    assert pairwise_alphas[('Annotator2', 'Annotator3')] < \
+        pairwise_alphas[('Annotator1', 'Annotator2')]
+
+
+def test_calculate_pairwise_with_missing_values(alpha_calculator):
+    """Test calculate_pairwise method with missing values."""
+    # Create test data with missing values
+    data = {
+        'Annotator1': [1, 2, np.nan, 4, 5],
+        'Annotator2': [1, np.nan, 3, 4, 5],
+        'Annotator3': [np.nan, 2, 3, 4, 5]
+    }
+    df = pd.DataFrame(data)
+
+    # Calculate pairwise alphas
+    pairwise_alphas = alpha_calculator.calculate_pairwise(df)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_alphas, dict)
+
+    # Check that all pairs are present
+    expected_pairs = [
+        ('Annotator1', 'Annotator2'),
+        ('Annotator1', 'Annotator3'),
+        ('Annotator2', 'Annotator3')
+    ]
+    for pair in expected_pairs:
+        assert pair in pairwise_alphas
+
+    # Check that values are between -1 and 1
+    for alpha in pairwise_alphas.values():
+        assert -1.0 <= alpha <= 1.0
+
+
+def test_calculate_pairwise_with_different_metrics(alpha_calculator):
+    """Test calculate_pairwise method with different metrics."""
+    # Create test data
+    data = {
+        'Annotator1': [1, 2, 3, 4, 5],
+        'Annotator2': [1, 2, 3, 4, 5],
+        'Annotator3': [2, 3, 4, 5, 1]
+    }
+    df = pd.DataFrame(data)
+
+    # Calculate pairwise alphas with different metrics
+    metrics = ['nominal', 'ordinal', 'interval', 'ratio']
+
+    for metric in metrics:
+        pairwise_alphas = alpha_calculator.calculate_pairwise(df,
+                                                              metric=metric)
+
+        # Check that result is a dictionary
+        assert isinstance(pairwise_alphas, dict)
+
+        # Check that all pairs are present
+        expected_pairs = [
+            ('Annotator1', 'Annotator2'),
+            ('Annotator1', 'Annotator3'),
+            ('Annotator2', 'Annotator3')
+        ]
+        for pair in expected_pairs:
+            assert pair in pairwise_alphas
+
+        # Check that values are between -1 and 1
+        for alpha in pairwise_alphas.values():
+            assert -1.0 <= alpha <= 1.0
+
+
+def test_calculate_pairwise_with_empty_dataframe(alpha_calculator):
+    """Test calculate_pairwise method with an empty DataFrame."""
+    # Create an empty DataFrame
+    df = pd.DataFrame()
+
+    # Calculate pairwise alphas
+    pairwise_alphas = alpha_calculator.calculate_pairwise(df)
+
+    # Check that result is an empty dictionary
+    assert isinstance(pairwise_alphas, dict)
+    assert len(pairwise_alphas) == 0
+
+
+def test_calculate_pairwise_with_single_annotator(alpha_calculator):
+    """Test calculate_pairwise method with a single annotator."""
+    # Create test data with only one annotator
+    data = {
+        'Annotator1': [1, 2, 3, 4, 5]
+    }
+    df = pd.DataFrame(data)
+
+    # Calculate pairwise alphas
+    pairwise_alphas = alpha_calculator.calculate_pairwise(df)
+
+    # Check that result is an empty dictionary (no pairs possible)
+    assert isinstance(pairwise_alphas, dict)
+    assert len(pairwise_alphas) == 0

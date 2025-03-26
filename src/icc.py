@@ -1,42 +1,20 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, Union, Literal
-from Utils.logger import get_logger, LogLevel
+from typing import Dict, Union, Literal, Tuple
+from Utils.logger import get_logger
+from src.agreement_measure import AgreementMeasure
 
 
-class ICC:
+class ICC(AgreementMeasure):
     """
     A class to calculate Intraclass Correlation Coefficient (ICC).
 
-    ICC is a reliability measure used to assess the agreement between
-    continuous or ordinal annotations from multiple annotators. It compares
-    the variance between annotators to the total variance, estimating the
-    proportion of variance attributable to agreement.
-
-    This implementation supports different ICC forms:
-    - ICC(1,1): One-way random effects, single rater/measurement
-    - ICC(2,1): Two-way random effects, single rater/measurement
-    - ICC(3,1): Two-way mixed effects, single rater/measurement
-    - ICC(1,k): One-way random effects, average of k raters/measurements
-    - ICC(2,k): Two-way random effects, average of k raters/measurements
-    - ICC(3,k): Two-way mixed effects, average of k raters/measurements
+    ICC measures the reliability of ratings by comparing the variability of
+    different ratings of the same subject to the total variation across all
+    ratings and subjects.
     """
 
-    def __init__(self, level: LogLevel = LogLevel.INFO):
-        """
-        Initialize the ICC calculator.
-
-        Args:
-            level (LogLevel, optional):
-                Logging level. Defaults to LogLevel.INFO.
-        """
-        self._logger = get_logger(level)
-
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
-
+    @get_logger().log_scope
     def calculate(self,
                   df: pd.DataFrame,
                   form: Literal['1,1',
@@ -64,7 +42,12 @@ class ICC:
         """
         self.logger.info(f"Calculating ICC({form})")
 
-        # Convert DataFrame to numpy array, handling missing values
+        # Validate input
+        if df.empty:
+            self.logger.warning("Empty DataFrame provided")
+            return 0.0
+
+        # Convert to numpy array and handle missing values
         data = df.values.copy()
 
         # Check if data contains missing values
@@ -158,49 +141,116 @@ class ICC:
         self.logger.info(f"ICC({form}) = {icc:.4f}")
         return icc
 
-    def get_icc_statistics(self,
-                           df: pd.DataFrame) -> Dict[str, Union[float, str]]:
-        """
-        Calculate ICC with different forms and provide statistics.
-
-        Args:
-            df (pd.DataFrame):
-                DataFrame with annotator scores as columns and items as rows.
-
-        Returns:
-            Dict[str, Union[float, str]]:
-                Dictionary with ICC values and interpretations.
-        """
-        results = {}
-
-        # Calculate ICC with different forms
-        forms = ['1,1', '2,1', '3,1', '1,k', '2,k', '3,k']
-        for form in forms:
-            icc = self.calculate(df, form=form)
-            results[f'icc_{form}'] = icc
-            results[f'interpretation_{form}'] = self.interpret_icc(icc)
-
-        # Add recommended ICC (2,1) as the main result
-        results['icc'] = results['icc_2,1']
-        results['interpretation'] = results['interpretation_2,1']
-
-        return results
-
+    @get_logger().log_scope
     def interpret_icc(self, icc: float) -> str:
         """
         Interpret the ICC value.
 
         Args:
-            icc (float): ICC value between 0 and 1.
+            icc (float): ICC value (typically between 0 and 1).
 
         Returns:
             str: Interpretation of the ICC value.
         """
-        if icc < 0.40:
-            return "Poor reliability"
-        elif icc < 0.60:
-            return "Fair reliability"
-        elif icc < 0.75:
-            return "Good reliability"
-        else:
-            return "Excellent reliability"
+        return self.interpret(icc)
+
+    @get_logger().log_scope
+    def get_icc_statistics(self,
+                           df: pd.DataFrame,
+                           form: Literal['1,1',
+                                         '2,1',
+                                         '3,1',
+                                         '1,k',
+                                         '2,k',
+                                         '3,k'] = '2,1'
+                           ) -> Dict[str, Union[float, str]]:
+        """
+        Calculate ICC and provide statistics.
+
+        Args:
+            df (pd.DataFrame): DataFrame with annotator scores.
+            form (str, optional): ICC form to calculate. Defaults to '2,1'.
+
+        Returns:
+            Dict[str, Union[float, str]]:
+                    Dictionary with ICC values and interpretation.
+        """
+        results = {}
+
+        # Calculate ICC for the specified form (default)
+        icc = self.calculate(df, form)
+        results['icc'] = icc
+        results['interpretation'] = self.interpret_icc(icc)
+
+        # Calculate ICC for all forms
+        results['icc_1,1'] = self.calculate(df, '1,1')
+        results['icc_2,1'] = self.calculate(df, '2,1')
+        results['icc_3,1'] = self.calculate(df, '3,1')
+        results['icc_1,k'] = self.calculate(df, '1,k')
+        results['icc_2,k'] = self.calculate(df, '2,k')
+        results['icc_3,k'] = self.calculate(df, '3,k')
+
+        return results
+
+    @get_logger().log_scope
+    def calculate_pairwise(self,
+                           df: pd.DataFrame,
+                           form='2,1') -> Dict[Tuple[str, str], float]:
+        """
+        Calculate ICC for each pair of annotators.
+
+        Args:
+            df (pd.DataFrame): DataFrame with annotator scores as columns.
+            form (str): ICC form to calculate, in the format 'k,l' where k
+                is the model (1, 2, or 3) and l is the type (1 for single,
+                k for average). Default is '2,1' (two-way random effects,
+                single rater).
+
+        Returns:
+            Dict[Tuple[str, str], float]: Dictionary with annotator pairs as
+                keys and ICC values as values.
+        """
+        self.logger.info(f"Calculating pairwise ICC values (form {form})")
+
+        pairwise_iccs = {}
+        columns = df.columns
+        n_annotators = len(columns)
+
+        for i in range(n_annotators):
+            for j in range(i + 1, n_annotators):
+                # Select only the two annotators
+                pair_df = df[[columns[i], columns[j]]].copy()
+
+                # Drop rows with missing values
+                pair_df = pair_df.dropna()
+
+                if len(pair_df) == 0:
+                    self.logger.warning(
+                        f"No valid data for pair {columns[i]} and "
+                        f"{columns[j]}")
+                    continue
+
+                # For two raters, we need to adjust the form
+                # Only form '1,1' (one-way random effects, single rater)
+                # makes sense for two raters
+                pair_form = '1,1'
+
+                # Calculate ICC for this pair
+                try:
+                    # Calculate ICC directly on the DataFrame
+                    icc_value = self.calculate(pair_df, pair_form)
+
+                    # Store result with annotator names as key
+                    pair_key = (columns[i], columns[j])
+                    pairwise_iccs[pair_key] = icc_value
+
+                    self.logger.debug(
+                        f"ICC between {columns[i]} and {columns[j]}: "
+                        f"{icc_value:.4f}")
+                except Exception as e:
+                    self.logger.warning(
+                        f"Error calculating ICC for pair {columns[i]} and "
+                        f"{columns[j]}: {str(e)}")
+                    continue
+
+        return pairwise_iccs

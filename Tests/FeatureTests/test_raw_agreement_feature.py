@@ -69,7 +69,7 @@ def test_raw_agreement_on_real_data(logger,
 
     # Calculate overall agreement
     logger.info("Calculating overall agreement...")
-    overall = agreement_calc.calculate_overall(df)
+    overall = agreement_calc.calculate(df)
     logger.info(f"Overall agreement: {overall:.1%}")
 
     # Check that overall agreement is between 0 and 1

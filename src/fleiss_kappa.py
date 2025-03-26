@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
-from typing import Dict
-from Utils.logger import get_logger, LogLevel
+from typing import Dict, Tuple
+from Utils.logger import get_logger
+from src.agreement_measure import AgreementMeasure
 
 
-class FleissKappa:
+class FleissKappa(AgreementMeasure):
     """
     Class for calculating Fleiss' Kappa, a statistical measure of inter-rater
     reliability for categorical items.
@@ -13,21 +14,6 @@ class FleissKappa:
     items. It measures the degree of agreement among raters beyond what would
     be expected by chance.
     """
-
-    def __init__(self, level: LogLevel = LogLevel.INFO):
-        """
-        Initialize the FleissKappa calculator.
-
-        Args:
-            logger: Logger instance for logging messages.
-        """
-        # Use get_logger() to obtain the singleton instance
-        self._logger = get_logger(level)
-
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
 
     @get_logger().log_scope
     def calculate(self, df: pd.DataFrame) -> float:
@@ -44,7 +30,7 @@ class FleissKappa:
         score_cols = [col for col in df.columns if col.endswith('_score')]
 
         if len(score_cols) < 2:
-            self._logger.warning(
+            self.logger.warning(
                 "At least 2 annotators are required for Fleiss' Kappa"
             )
             return 0.0
@@ -58,7 +44,7 @@ class FleissKappa:
         categories = sorted(all_scores)
         n_categories = len(categories)
 
-        self._logger.info(
+        self.logger.info(
             f"Found {n_categories} unique categories: {categories}"
         )
 
@@ -91,7 +77,7 @@ class FleissKappa:
         n_ratings_per_item = n_ratings_per_item[valid_items]
 
         if len(category_counts) == 0:
-            self._logger.warning(
+            self.logger.warning(
                 "No valid items found for Fleiss' Kappa calculation"
             )
             return 0.0
@@ -126,9 +112,9 @@ class FleissKappa:
 
         kappa = (P_o - P_e) / (1 - P_e)
 
-        self._logger.info(f"Fleiss' Kappa: {kappa:.4f}")
-        self._logger.info(f"Observed agreement (P_o): {P_o:.4f}")
-        self._logger.info(f"Expected agreement (P_e): {P_e:.4f}")
+        self.logger.info(f"Fleiss' Kappa: {kappa:.4f}")
+        self.logger.info(f"Observed agreement (P_o): {P_o:.4f}")
+        self.logger.info(f"Expected agreement (P_e): {P_e:.4f}")
 
         return kappa
 
@@ -148,7 +134,7 @@ class FleissKappa:
         score_cols = [col for col in df.columns if col.endswith('_score')]
 
         if len(score_cols) < 2:
-            self._logger.warning(
+            self.logger.warning(
                 "At least 2 annotators are required for Fleiss' Kappa"
             )
             return {}
@@ -191,7 +177,7 @@ class FleissKappa:
         n_ratings_per_item = n_ratings_per_item[valid_items]
 
         if len(category_counts) == 0:
-            self._logger.warning(
+            self.logger.warning(
                 "No valid items found for Fleiss' Kappa calculation"
             )
             return {}
@@ -216,7 +202,7 @@ class FleissKappa:
             kappa_j = self.calculate(category_df)
 
             kappas[int(category)] = kappa_j
-            self._logger.info(
+            self.logger.info(
                 f"Fleiss' Kappa for category {int(category)}: {kappa_j:.4f}"
             )
 
@@ -233,15 +219,134 @@ class FleissKappa:
         Returns:
             str: Interpretation of the kappa value.
         """
-        if kappa < 0:
-            return "Poor agreement (less than chance)"
-        elif kappa < 0.2:
-            return "Slight agreement"
-        elif kappa < 0.4:
-            return "Fair agreement"
-        elif kappa < 0.6:
-            return "Moderate agreement"
-        elif kappa < 0.8:
-            return "Substantial agreement"
-        else:
-            return "Almost perfect agreement"
+        return self.interpret(kappa)
+
+    @get_logger().log_scope
+    def get_kappa_statistics(self, df: pd.DataFrame) -> Dict[str, float]:
+        """
+        Calculate various Fleiss' Kappa statistics.
+
+        Args:
+            df (pd.DataFrame): DataFrame with annotator scores as columns.
+
+        Returns:
+            Dict[str, float]: Dictionary with various kappa statistics.
+        """
+        self.logger.info("Calculating Fleiss' Kappa statistics")
+
+        # Calculate overall kappa
+        kappa = self.calculate(df)
+
+        # Calculate kappa by category
+        kappas_by_category = self.calculate_by_category(df)
+
+        # Compile statistics
+        stats = {
+            'kappa': kappa,
+            'interpretation': self.interpret_kappa(kappa)
+        }
+
+        # Add category-specific kappas
+        for category, k in kappas_by_category.items():
+            stats[f'kappa_category_{category}'] = k
+            stats[
+                f'interpretation_category_{category}'
+                ] = self.interpret_kappa(k)
+
+        # Add min, max, and average category kappa if there are categories
+        if kappas_by_category:
+            stats['min_category_kappa'] = min(kappas_by_category.values())
+            stats['max_category_kappa'] = max(kappas_by_category.values())
+            stats['avg_category_kappa'] = np.mean(
+                list(kappas_by_category.values()))
+
+        return stats
+
+    @get_logger().log_scope
+    def calculate_pairwise(self,
+                           df: pd.DataFrame) -> Dict[Tuple[str, str], float]:
+        """
+        Calculate Fleiss' Kappa for each pair of annotators.
+
+        Args:
+            df (pd.DataFrame): DataFrame with annotator scores as columns.
+
+        Returns:
+            Dict[Tuple[str, str], float]: Dictionary with annotator pairs as
+                keys and kappa values as values.
+        """
+        self.logger.info("Calculating pairwise Fleiss' Kappa values")
+
+        pairwise_kappas = {}
+        columns = df.columns
+        n_annotators = len(columns)
+
+        for i in range(n_annotators):
+            for j in range(i + 1, n_annotators):
+                # Select only the two annotators
+                pair_df = df[[columns[i], columns[j]]].copy()
+
+                # Drop rows with missing values
+                pair_df = pair_df.dropna()
+
+                if len(pair_df) == 0:
+                    self.logger.warning(
+                        f"No valid data for pair {columns[i]} and "
+                        f"{columns[j]}")
+                    continue
+
+                # Calculate kappa for this pair
+                # For two annotators, Fleiss' Kappa is equivalent to Cohen's
+                # Kappa. So we can use the same calculation approach.
+
+                # Get unique categories
+                all_categories = sorted(set(pair_df[columns[i]].unique()) |
+                                        set(pair_df[columns[j]].unique()))
+
+                # Create contingency table
+                contingency_table = pd.crosstab(
+                    pair_df[columns[i]], pair_df[columns[j]])
+
+                # Ensure all categories are in the table
+                for cat in all_categories:
+                    if cat not in contingency_table.index:
+                        contingency_table.loc[cat] = 0
+                    if cat not in contingency_table.columns:
+                        contingency_table[cat] = 0
+
+                # Sort the table by category
+                contingency_table = (contingency_table
+                                     .sort_index(axis=0)
+                                     .sort_index(axis=1))
+
+                # Calculate observed agreement
+                n = contingency_table.sum().sum()
+                observed_agreement = (contingency_table.values.diagonal()
+                                      .sum() / n)
+
+                # Calculate expected agreement
+                row_sums = contingency_table.sum(axis=1)
+                col_sums = contingency_table.sum(axis=0)
+
+                # Use the categories as indices, not numeric indices
+                expected_agreement = sum(
+                    (row_sums[cat] * col_sums[cat]) / (n * n)
+                    for cat in all_categories)
+
+                # Calculate kappa
+                if expected_agreement == 1:
+                    # Perfect expected agreement, kappa is undefined
+                    kappa = 1.0 if observed_agreement == 1 else 0.0
+                else:
+                    difference = observed_agreement - expected_agreement
+                    kappa = (difference) / (1 - expected_agreement)
+
+                # Store result with annotator names as key
+                pair_key = (columns[i], columns[j])
+                pairwise_kappas[pair_key] = kappa
+
+                self.logger.debug(
+                    f"Kappa between {columns[i]} and {columns[j]}: "
+                    f"{kappa:.4f}")
+
+        return pairwise_kappas

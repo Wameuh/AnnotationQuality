@@ -1,33 +1,50 @@
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Union
-from Utils.logger import get_logger, LogLevel
+from typing import Dict, Union, List, Tuple
+from Utils.logger import get_logger
+from src.agreement_measure import AgreementMeasure
 
 
-class IoUAgreement:
+class IoUAgreement(AgreementMeasure):
     """
-    A class to calculate Intersection over Union (IoU) based agreement
-    measures.
+    A class to calculate Intersection over Union (IoU) agreement between
+    annotators.
 
-    IoU is commonly used for evaluating segmentation tasks. This class provides
-    methods to calculate IoU between multiple annotators and interpret the
-    results.
+    IoU measures the overlap between annotations by comparing the ratio of
+    intersection area to union area.
     """
 
-    def __init__(self, level: LogLevel = LogLevel.INFO):
+    @get_logger().log_scope
+    def calculate(self, annotations: List[np.ndarray]) -> float:
         """
-        Initialize the IoUAgreement calculator.
+        Calculate IoU agreement for the given annotations.
 
         Args:
-            level (LogLevel, optional):
-            Logging level. Defaults to LogLevel.INFO.
-        """
-        self._logger = get_logger(level)
+            annotations (List[np.ndarray]):
+                List of binary masks or bounding boxes.
 
-    @property
-    def logger(self):
-        """Get the logger instance."""
-        return self._logger
+        Returns:
+            float: IoU agreement value (between 0 and 1).
+        """
+        self.logger.info("Calculating IoU agreement")
+        # Validate input
+        if not annotations or len(annotations) < 2:
+            self.logger.warning("Insufficient annotations provided")
+            return 0.0
+
+        # Calculate pairwise IoU values
+        pairwise_ious = self.calculate_pairwise(annotations)
+
+        # Calculate average IoU
+        if not pairwise_ious:
+            self.logger.warning("No valid IoU values calculated")
+            return 0.0
+
+        avg_iou = sum(pairwise_ious.values()) / len(pairwise_ious)
+
+        self.logger.info(f"Average IoU: {avg_iou:.4f}")
+
+        return avg_iou
 
     def calculate_pairwise_iou(self,
                                mask1: np.ndarray,
@@ -131,17 +148,21 @@ class IoUAgreement:
 
         return self.calculate_mean_iou(masks)
 
+    @get_logger().log_scope
     def interpret_iou(self, iou: float) -> str:
         """
         Interpret the IoU value.
 
         Args:
-            iou (float): IoU value
+            iou (float): IoU value (between 0 and 1).
 
         Returns:
-            str: Interpretation of the IoU value
+            str: Interpretation of the IoU value.
         """
-        if iou < 0.2:
+        # Use custom interpretation for IoU
+        if iou < 0 or iou > 1:
+            return "Invalid IoU value"
+        elif iou < 0.2:
             return "Poor agreement"
         elif iou < 0.4:
             return "Fair agreement"
@@ -152,36 +173,79 @@ class IoUAgreement:
         else:
             return "Almost perfect agreement"
 
+    @get_logger().log_scope
     def get_iou_statistics(self,
-                           masks: List[np.ndarray]) -> Dict[str,
-                                                            Union[float, str]]:
+                           annotations: List[np.ndarray]
+                           ) -> Dict[str, Union[float, str]]:
         """
-        Calculate IoU statistics for a list of masks.
+        Calculate IoU agreement and provide statistics.
 
         Args:
-            masks (List[np.ndarray]):
-                List of binary masks from different annotators
+            annotations (List[np.ndarray]):
+                List of binary masks or bounding boxes.
 
         Returns:
-            Dict[str, Union[float, str]]: Dictionary with IoU statistics
+            Dict[str, Union[float, str]]:
+                Dictionary with IoU value and interpretation.
         """
         results = {}
 
-        # Calculate mean IoU
-        mean_iou = self.calculate_mean_iou(masks)
-        results['mean_iou'] = mean_iou
-        results['interpretation'] = self.interpret_iou(mean_iou)
+        # Calculate IoU
+        iou = self.calculate(annotations)
+        results['iou'] = iou
+        results['interpretation'] = self.interpret_iou(iou)
 
-        # Calculate pairwise IoUs
-        n_annotators = len(masks)
-        for i in range(n_annotators):
-            for j in range(i+1, n_annotators):
-                iou = self.calculate_pairwise_iou(masks[i], masks[j])
-                results[f'iou_{i+1}_{j+1}'] = iou
+        # Calculate pairwise IoU values
+        pairwise_ious = self.calculate_pairwise(annotations)
 
-        # Calculate min and max IoU
-        pairwise_ious = [v for k, v in results.items() if k.startswith('iou_')]
-        results['min_iou'] = min(pairwise_ious)
-        results['max_iou'] = max(pairwise_ious)
+        # Add individual pairwise IoUs to results
+        for (i, j), iou_value in pairwise_ious.items():
+            results[f'iou_{i+1}_{j+1}'] = iou_value
+
+        # Calculate min, max, and std of pairwise IoU values
+        if pairwise_ious:
+            iou_values = list(pairwise_ious.values())
+            results['min_iou'] = min(iou_values)
+            results['max_iou'] = max(iou_values)
+            results['std_iou'] = np.std(iou_values)
+        else:
+            results['min_iou'] = 0.0
+            results['max_iou'] = 0.0
+            results['std_iou'] = 0.0
 
         return results
+
+    @get_logger().log_scope
+    def calculate_pairwise(self,
+                           annotations: List[np.ndarray]
+                           ) -> Dict[Tuple[int, int], float]:
+        """
+        Calculate pairwise IoU values between all annotators.
+
+        Args:
+            annotations (List[np.ndarray]):
+                List of binary masks or bounding boxes.
+
+        Returns:
+            Dict[Tuple[int, int], float]: Dictionary mapping pairs of annotator
+                indices to their IoU values.
+        """
+        self.logger.info("Calculating pairwise IoU values")
+
+        pairwise_ious = {}
+        n_annotators = len(annotations)
+
+        for i in range(n_annotators):
+            for j in range(i + 1, n_annotators):
+                # Calculate IoU between annotator i and j
+                iou = self.calculate_pairwise_iou(annotations[i],
+                                                  annotations[j])
+
+                # Store result with annotator indices as key
+                pair_key = (i, j)
+                pairwise_ious[pair_key] = iou
+
+                self.logger.debug(
+                    f"IoU between annotator {i} and {j}: {iou:.4f}")
+
+        return pairwise_ious

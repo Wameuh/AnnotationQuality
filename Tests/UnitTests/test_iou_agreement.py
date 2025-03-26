@@ -256,7 +256,7 @@ def test_get_iou_statistics(iou_calculator, high_agreement_masks):
     stats = iou_calculator.get_iou_statistics(high_agreement_masks)
 
     # Check that all expected keys are present
-    assert 'mean_iou' in stats
+    assert 'iou' in stats
     assert 'interpretation' in stats
     assert 'min_iou' in stats
     assert 'max_iou' in stats
@@ -267,7 +267,7 @@ def test_get_iou_statistics(iou_calculator, high_agreement_masks):
     assert 'iou_2_3' in stats
 
     # Check that values are in expected range
-    assert 0 <= stats['mean_iou'] <= 1
+    assert 0 <= stats['iou'] <= 1
     assert 0 <= stats['min_iou'] <= 1
     assert 0 <= stats['max_iou'] <= 1
     assert isinstance(stats['interpretation'], str)
@@ -291,3 +291,92 @@ def test_iou_agreement_init_with_custom_level():
 
     # Check that logger has correct level
     assert iou_calc.logger.level == LogLevel.DEBUG
+
+
+def test_calculate_with_empty_annotations(iou_calculator):
+    """Test calculate method with empty annotations list."""
+    # Empty list of annotations
+    annotations = []
+
+    # Calculate IoU
+    iou = iou_calculator.calculate(annotations)
+
+    # Should return 0.0 for empty annotations
+    assert iou == 0.0
+
+
+def test_calculate_with_single_annotation(iou_calculator):
+    """Test calculate method with only one annotation."""
+    # Create a single binary mask
+    mask = np.zeros((5, 5), dtype=bool)
+    mask[1:4, 1:4] = True
+
+    # List with only one annotation
+    annotations = [mask]
+
+    # Calculate IoU
+    iou = iou_calculator.calculate(annotations)
+
+    # Should return 0.0 when there's only one annotation
+    assert iou == 0.0
+
+
+def test_calculate_with_no_valid_pairs(iou_calculator, monkeypatch):
+    """Test calculate method when no valid IoU pairs can be calculated."""
+    # Create two binary masks
+    mask1 = np.zeros((5, 5), dtype=bool)
+    mask1[1:4, 1:4] = True
+    mask2 = np.zeros((5, 5), dtype=bool)
+    mask2[2:5, 2:5] = True
+
+    # Mock calculate_pairwise to return an empty dictionary
+    def mock_calculate_pairwise(self, annotations):
+        return {}
+
+    # Apply the mock
+    monkeypatch.setattr(IoUAgreement,
+                        "calculate_pairwise",
+                        mock_calculate_pairwise)
+
+    # Calculate IoU
+    iou = iou_calculator.calculate([mask1, mask2])
+
+    # Should return 0.0 when no valid pairs are found
+    assert iou == 0.0
+
+
+def test_interpret_iou_with_invalid_values(iou_calculator):
+    """Test interpret_iou method with values outside the valid range."""
+    # Test with negative value
+    assert "Invalid IoU value" in iou_calculator.interpret_iou(-0.1)
+
+    # Test with value greater than 1
+    assert "Invalid IoU value" in iou_calculator.interpret_iou(1.1)
+
+
+def test_get_iou_statistics_with_no_valid_pairs(iou_calculator, monkeypatch):
+    """
+    Test get_iou_statistics method when no valid IoU pairs can be calculated.
+    """
+    # Create two binary masks
+    mask1 = np.zeros((5, 5), dtype=bool)
+    mask1[1:4, 1:4] = True
+    mask2 = np.zeros((5, 5), dtype=bool)
+    mask2[2:5, 2:5] = True
+
+    # Mock calculate_pairwise to return an empty dictionary
+    def mock_calculate_pairwise(self, annotations):
+        return {}
+
+    # Apply the mock
+    monkeypatch.setattr(IoUAgreement,
+                        "calculate_pairwise",
+                        mock_calculate_pairwise)
+
+    # Calculate IoU statistics
+    stats = iou_calculator.get_iou_statistics([mask1, mask2])
+
+    # Check that min_iou, max_iou, and std_iou are all 0.0
+    assert stats['min_iou'] == 0.0
+    assert stats['max_iou'] == 0.0
+    assert stats['std_iou'] == 0.0

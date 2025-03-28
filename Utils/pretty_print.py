@@ -324,13 +324,13 @@ def export_agreement_csv(
         # Write header row with the exact format requested
         if confidence_intervals:
             writer.writerow([
-                    'Annotator1_name',
-                    'Annotator2_name',
-                    'Agreement',
-                    'Lower_Bound_interval',
-                    'Upper_bound_interval',
-                    'p'
-                ])
+                            'Annotator1_name',
+                            'Annotator2_name',
+                            'Agreement',
+                            'Lower_Bound_interval',
+                            'Upper_bound_interval',
+                            'p'
+                            ])
         else:
             writer.writerow([
                 'Annotator1_name',

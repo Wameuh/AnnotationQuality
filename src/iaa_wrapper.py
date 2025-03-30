@@ -361,8 +361,9 @@ class IAAWrapper:
             for measure, result in self.results.items():
                 f.write(f"<h2>{measure.upper()}</h2>\n")
                 # Use the same naming convention as when creating the files
-                href = f"{base_name_without_ext}_{measure}.html"
-                f.write(f"<p>See <a href='{href}'>{measure} results</a></p>\n")
+                # Ensures links match the actual file names
+                html_file_name = base_name_without_ext + f"_{measure}.html"
+                f.write(f"<p>See <a href='{html_file_name}'>{measure} results</a></p>\n")
 
                 # Add interpretation if available
                 if (isinstance(result, (int, float)) and

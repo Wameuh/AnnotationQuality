@@ -359,8 +359,11 @@ def test_output_to_console(wrapper):
             # Call the method
             wrapper._output_to_console()
 
-            # Check that print_agreement_table was called for the raw agreement
-            mock_print.assert_called_once()
+            # Check that print_agreement_table was called at least once
+            assert mock_print.call_count >= 1, (
+                f"Expected print_agreement_table to be called at least once, "
+                f"but was called {mock_print.call_count} times"
+            )
 
             # Check that the output contains the fleiss_kappa value
             output = fake_out.getvalue()
@@ -394,7 +397,8 @@ def test_output_to_csv_pairwise(wrapper):
             mock_export.assert_called_once_with(
                 tmp_path,
                 {'raw': wrapper.results['raw']},
-                {}
+                {},
+                use_method_names=True
             )
     finally:
         # Clean up the temporary file
@@ -413,21 +417,46 @@ def test_output_to_csv_single_value(wrapper):
     # Create a temporary file
     with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
         tmp_path = tmp.name
+        base_name, ext = os.path.splitext(tmp_path)
 
     try:
-        # Call the method
-        wrapper._output_to_csv(tmp_path)
+        # Mock save_agreement_csv to verify it's called correctly
+        with patch('src.iaa_wrapper.save_agreement_csv') as mock_save:
+            # Call the method
+            wrapper._output_to_csv(tmp_path)
 
-        # Check that the file was created and contains the correct data
-        with open(tmp_path, 'r') as f:
-            content = f.read()
-            assert "Measure,Value" in content
-            assert "fleiss_kappa,0.6500" in content
-            assert "krippendorff_alpha,0.7000" in content
+            # Check that save_agreement_csv was called once for each measure
+            assert mock_save.call_count == 2, (
+                f"Expected save_agreement_csv to be called 2 times, "
+                f"but was called {mock_save.call_count} times"
+            )
+
+            # Verify the calls with the correct parameters
+            expected_calls = []
+            for measure, value in wrapper.results.items():
+                measure_file = f"{base_name}_{measure}{ext}"
+                expected_calls.append(
+                    call(
+                        measure_file,
+                        {('Global', 'Result'): value},
+                        confidence_intervals=None,
+                        agreement_name=measure
+                    )
+                )
+
+            mock_save.assert_has_calls(expected_calls, any_order=True)
+
     finally:
-        # Clean up the temporary file
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        # Clean up the temporary files
+        for measure in wrapper.results.keys():
+            measure_file = f"{base_name}_{measure}{ext}"
+            if os.path.exists(measure_file):
+                os.unlink(measure_file)
+        # Clean up interpretation files if they exist
+        for measure in wrapper.results.keys():
+            interp_file = f"{base_name}_{measure}_interpretation.txt"
+            if os.path.exists(interp_file):
+                os.unlink(interp_file)
 
 
 def test_run(wrapper, sample_data):
@@ -575,9 +604,22 @@ def test_output_to_html(wrapper):
         'fleiss_kappa': 0.65
     }
 
+    # Create mock calculators with interpret method
+    for measure in wrapper.results.keys():
+        # Only set up interpreter for fleiss_kappa since raw is a dict
+        if measure == 'fleiss_kappa':
+            mock_calculator = MagicMock()
+            mock_calculator.interpret.return_value = (
+                f"Test interpretation for {measure}"
+            )
+            wrapper.calculators[measure] = mock_calculator
+
     # Create a temporary file
     with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as tmp:
         tmp_path = tmp.name
+        # Extract the base filename for the test
+        base_filename = os.path.basename(tmp_path)
+        base_name_without_ext = os.path.splitext(base_filename)[0]
 
     try:
         # Mock save_agreement_html
@@ -585,8 +627,11 @@ def test_output_to_html(wrapper):
             # Call the method
             wrapper._output_to_html(tmp_path)
 
-            # Check that save_agreement_html was called for the raw agreement
-            mock_save.assert_called_once()
+            # Check that save_agreement_html was called once for each measure
+            assert mock_save.call_count == 2, (
+                f"Expected save_agreement_html to be called 2 times, "
+                f"but was called {mock_save.call_count} times"
+            )
 
             # Check that the HTML file was created and contains the expected
             # content
@@ -594,7 +639,23 @@ def test_output_to_html(wrapper):
                 content = f.read()
                 assert "<html>" in content
                 assert "<title>IAA-Eval Results</title>" in content
-                assert "fleiss_kappa: 0.6500" in content
+
+                # Check that the links are correctly formatted
+                for measure in wrapper.results.keys():
+                    expected_link = f"{base_name_without_ext}_{measure}.html"
+                    assert f'href=\'{expected_link}\'' in content, (
+                        f"Link to {measure} is incorrect"
+                    )
+
+                # Also check that there are no incorrectly formatted links
+                for measure in wrapper.results.keys():
+                    incorrect_link = f"href='{measure}.html'"
+                    assert incorrect_link not in content, (
+                        f"Found incorrectly formatted link: {incorrect_link}"
+                    )
+
+                # Check for interpretation content (only for fleiss_kappa)
+                assert "Test interpretation for fleiss_kappa" in content
     finally:
         # Clean up the temporary file
         if os.path.exists(tmp_path):
@@ -674,8 +735,11 @@ def test_output_to_text_file(wrapper):
             # Call the method
             wrapper._output_to_text_file(tmp_path)
 
-            # Check that print_agreement_table was called for the raw agreement
-            mock_print.assert_called_once()
+            # Check that print_agreement_table was called at least once
+            assert mock_print.call_count >= 1, (
+                f"Expected print_agreement_table to be called at least once, "
+                f"but was called {mock_print.call_count} times"
+            )
 
             # Check that the text file was created and contains the expected
             # content
@@ -781,22 +845,44 @@ def test_interpret_results(wrapper):
     # Test _output_to_csv
     with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
         tmp_path = tmp.name
+        base_name, ext = os.path.splitext(tmp_path)
 
     try:
-        wrapper._output_to_csv(tmp_path)
+        # Mock save_agreement_csv to check calls
+        with patch('src.iaa_wrapper.save_agreement_csv') as mock_save:
+            wrapper._output_to_csv(tmp_path)
 
-        # Check that the CSV file contains interpretations
-        with open(tmp_path, 'r') as f:
-            content = f.read()
-            for measure in wrapper.results:
+            # Check that the CSV files were created (one per measure)
+            assert mock_save.call_count == 3, (
+                f"Expected save_agreement_csv to be called 3 times, "
+                f"but was called {mock_save.call_count} times"
+            )
+
+        # Check that interpretation files were created
+        for measure in wrapper.results:
+            interp_file = f"{base_name}_{measure}_interpretation.txt"
+            assert os.path.exists(interp_file), (
+                f"Interpretation file for {measure} not created"
+            )
+            with open(interp_file, 'r') as f:
+                content = f.read()
                 assert f"Test interpretation for {measure}" in content
     finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        # Clean up temporary files
+        for measure in wrapper.results:
+            measure_file = f"{base_name}_{measure}{ext}"
+            if os.path.exists(measure_file):
+                os.unlink(measure_file)
+            interp_file = f"{base_name}_{measure}_interpretation.txt"
+            if os.path.exists(interp_file):
+                os.unlink(interp_file)
 
     # Test _output_to_html
     with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as tmp:
         tmp_path = tmp.name
+        # Extract the base filename for the test
+        base_filename = os.path.basename(tmp_path)
+        base_name_without_ext = os.path.splitext(base_filename)[0]
 
     try:
         # Mock save_agreement_html
@@ -806,8 +892,15 @@ def test_interpret_results(wrapper):
             # Check that the HTML file contains interpretations
             with open(tmp_path, 'r') as f:
                 content = f.read()
-                for measure in wrapper.results:
+                for measure in wrapper.results.keys():
+                    # Check for interpretation content
                     assert f"Test interpretation for {measure}" in content
+
+                    # Check that the links are correctly formatted
+                    expected_link = f"{base_name_without_ext}_{measure}.html"
+                    assert f'href=\'{expected_link}\'' in content, (
+                        f"Link to {measure} is incorrect"
+                    )
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
@@ -1058,3 +1151,369 @@ def test_output_results_with_unsupported_format(wrapper):
 
     # Check that _output_to_console was called
     wrapper._output_to_console.assert_called_once()
+
+
+def test_output_to_csv_single_value_with_ci(wrapper):
+    """Test _output_to_csv method with single value results and confidence
+    intervals.
+
+    This test specifically covers lines 286-287 in iaa_wrapper.py where
+    confidence intervals are set up for single value results.
+    """
+    # Set up the wrapper with some single value results
+    wrapper.results = {
+        'fleiss_kappa': 0.65
+    }
+
+    # Add confidence intervals
+    wrapper.confidence_intervals = {
+        'fleiss_kappa': {
+            'ci_lower': 0.55,
+            'ci_upper': 0.75,
+            'confidence_level': 0.95
+        }
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as tmp:
+        tmp_path = tmp.name
+        base_name, ext = os.path.splitext(tmp_path)
+
+    try:
+        # Mock save_agreement_csv
+        with patch('src.iaa_wrapper.save_agreement_csv') as mock_save:
+            # Call the method
+            wrapper._output_to_csv(tmp_path)
+
+            # Verify csv was called with confidence intervals
+            measure_file = f"{base_name}_fleiss_kappa{ext}"
+            expected_ci = {
+                ('Global', 'Result'):
+                wrapper.confidence_intervals['fleiss_kappa']
+            }
+
+            mock_save.assert_called_once_with(
+                measure_file,
+                {('Global', 'Result'): 0.65},
+                confidence_intervals=expected_ci,
+                agreement_name='fleiss_kappa'
+            )
+    finally:
+        # Clean up temporary files
+        measure_file = f"{base_name}_fleiss_kappa{ext}"
+        if os.path.exists(measure_file):
+            os.unlink(measure_file)
+        interp_file = f"{base_name}_fleiss_kappa_interpretation.txt"
+        if os.path.exists(interp_file):
+            os.unlink(interp_file)
+
+
+def test_output_to_html_single_value_with_ci(wrapper):
+    """Test _output_to_html method with single value results and confidence
+    intervals.
+
+    This test specifically covers lines 328-329 in iaa_wrapper.py where
+    confidence intervals are set up for single value results in HTML output.
+    """
+    # Set up the wrapper with some single value results
+    wrapper.results = {
+        'fleiss_kappa': 0.65
+    }
+
+    # Add confidence intervals
+    wrapper.confidence_intervals = {
+        'fleiss_kappa': {
+            'ci_lower': 0.55,
+            'ci_upper': 0.75,
+            'confidence_level': 0.95
+        }
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Mock save_agreement_html
+        with patch('src.iaa_wrapper.save_agreement_html') as mock_save:
+            # Call the method
+            wrapper._output_to_html(tmp_path)
+
+            # Verify html was called with confidence intervals
+            html_file = tmp_path.replace('.html', '_fleiss_kappa.html')
+            expected_ci = {
+                ('Global', 'Result'):
+                wrapper.confidence_intervals['fleiss_kappa']
+            }
+
+            mock_save.assert_has_calls([
+                call(
+                    html_file,
+                    {('Global', 'Result'): 0.65},
+                    confidence_intervals=expected_ci,
+                    title='FLEISS_KAPPA Agreement Result'
+                )
+            ])
+    finally:
+        # Clean up temporary files
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_output_to_json_with_pairwise_interpretation_no_global_value(wrapper):
+    """Test _output_to_json with a calculator that has interpret but no
+    get_global_value method.
+
+    This test specifically covers lines 414-419 in iaa_wrapper.py where
+    a calculator with interpret method but no get_global_value method is used
+    for pairwise result interpretations.
+    """
+    # Set up the wrapper with pairwise results
+    wrapper.results = {
+        'raw': {
+            ('Annotator1', 'Annotator2'): 0.8,
+            ('Annotator1', 'Annotator3'): 0.6,
+            ('Annotator2', 'Annotator3'): 0.7
+        }
+    }
+
+    # Create a mock calculator with interpret method but NO get_global_value
+    # method
+    mock_calculator = MagicMock()
+    mock_calculator.interpret.return_value = "Good agreement"
+    # Ensure the mock does not have get_global_value method
+    del mock_calculator.get_global_value
+    wrapper.calculators['raw'] = mock_calculator
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Call the method
+        wrapper._output_to_json(tmp_path)
+
+        # Verify interpret was called with the first pair's value
+        first_value = 0.8
+        mock_calculator.interpret.assert_called_once_with(first_value)
+
+        # Check that the JSON file contains the correct interpretation
+        with open(tmp_path, 'r') as f:
+            content = json.load(f)
+            assert 'interpretations' in content
+            assert 'raw' in content['interpretations']
+            expected_interpretation = (
+                "Example interpretation for Annotator1-Annotator2: "
+                "Good agreement")
+            assert content['interpretations']['raw'] == expected_interpretation
+    finally:
+        # Clean up temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_output_to_text_file_single_value_with_ci(wrapper):
+    """Test _output_to_text_file with single value results and confidence
+    intervals.
+
+    This test specifically covers lines 498-499 in iaa_wrapper.py where
+    confidence intervals are set up for single value results in text output.
+    """
+    # Set up the wrapper with some single value results
+    wrapper.results = {
+        'fleiss_kappa': 0.65
+    }
+
+    # Add confidence intervals
+    wrapper.confidence_intervals = {
+        'fleiss_kappa': {
+            'ci_lower': 0.55,
+            'ci_upper': 0.75,
+            'confidence_level': 0.95
+        }
+    }
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Mock print_agreement_table to capture calls
+        with patch('src.iaa_wrapper.print_agreement_table') as mock_print:
+            # Call the method
+            wrapper._output_to_text_file(tmp_path)
+
+            # Verify print_agreement_table was called with confidence intervals
+            expected_agreements = {('Global', 'Result'): 0.65}
+            expected_ci = {
+                ('Global', 'Result'):
+                wrapper.confidence_intervals['fleiss_kappa']
+            }
+
+            mock_print.assert_called_once_with(
+                expected_agreements,
+                confidence_intervals=expected_ci,
+                file=mock_print.call_args[1]['file']
+            )
+
+            # Check text file content
+            with open(tmp_path, 'r') as f:
+                content = f.read()
+                assert "=== FLEISS_KAPPA ===" in content
+                assert "Global fleiss_kappa: 0.6500" in content
+    finally:
+        # Clean up temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_output_to_html_with_confidence_interval_info(wrapper):
+    """Test _output_to_html method with confidence interval information.
+
+    This test specifically covers lines 359-368 in iaa_wrapper.py where
+    confidence interval information is added to the index HTML file.
+    """
+    # Set up the wrapper with some results
+    wrapper.results = {
+        'raw': {
+            ('Annotator1', 'Annotator2'): 0.8,
+            ('Annotator1', 'Annotator3'): 0.6,
+            ('Annotator2', 'Annotator3'): 0.7
+        },
+        'fleiss_kappa': 0.65
+    }
+
+    # Add confidence intervals
+    wrapper.confidence_intervals = {
+        'raw': {
+            ('Annotator1', 'Annotator2'): {
+                'ci_lower': 0.7,
+                'ci_upper': 0.9,
+                'confidence_level': 0.95
+            }
+        },
+        'fleiss_kappa': {
+            'ci_lower': 0.55,
+            'ci_upper': 0.75,
+            'confidence_level': 0.95
+        }
+    }
+
+    # Set confidence method and level
+    wrapper.args['confidence_interval'] = 0.95
+    wrapper.args['confidence_method'] = 'wilson'
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.html', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Mock save_agreement_html to avoid actual file creation
+        with patch('src.iaa_wrapper.save_agreement_html'):
+            # Call the method
+            wrapper._output_to_html(tmp_path)
+
+            # Check that the HTML index file contains confidence interval info
+            with open(tmp_path, 'r') as f:
+                content = f.read()
+                # Check for confidence interval section
+                assert "<h2>Confidence Interval Information</h2>" in content
+                assert "<p>Confidence Level: 95%</p>" in content
+                assert "<p>Method: wilson</p>" in content
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_output_to_json_with_calculator_global_value(wrapper):
+    """Test _output_to_json with a calculator that has get_global_value.
+
+    This test specifically covers lines 409-410 in iaa_wrapper.py where
+    a calculator with get_global_value method is used for interpretations.
+    """
+    # Set up the wrapper with pairwise results
+    wrapper.results = {
+        'raw': {
+            ('Annotator1', 'Annotator2'): 0.8,
+            ('Annotator1', 'Annotator3'): 0.6,
+            ('Annotator2', 'Annotator3'): 0.7
+        }
+    }
+
+    # Create a mock calculator with get_global_value method
+    mock_calculator = MagicMock()
+    mock_calculator.get_global_value.return_value = 0.7  # average value
+    mock_calculator.interpret.return_value = "Good agreement"
+    wrapper.calculators['raw'] = mock_calculator
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Call the method
+        wrapper._output_to_json(tmp_path)
+
+        # Verify calculator methods were called correctly
+        mock_calculator.get_global_value.assert_called_once_with(
+            wrapper.results['raw']
+        )
+        mock_calculator.interpret.assert_called_once_with(0.7)
+
+        # Check that the JSON file contains the correct interpretation
+        with open(tmp_path, 'r') as f:
+            content = json.load(f)
+            assert 'interpretations' in content
+            assert 'raw' in content['interpretations']
+            assert content['interpretations']['raw'] == "Good agreement"
+    finally:
+        # Clean up temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
+def test_output_to_json_with_pairwise_no_global_value(wrapper):
+    """Test _output_to_json with interpret but no get_global_value method.
+
+    This test covers lines 414-419 in iaa_wrapper.py where a calculator with
+    interpret method but no get_global_value method is used for pairwise
+    interpretations.
+    """
+    # Set up the wrapper with pairwise results
+    wrapper.results = {
+        'raw': {
+            ('Annotator1', 'Annotator2'): 0.8,
+            ('Annotator1', 'Annotator3'): 0.6,
+            ('Annotator2', 'Annotator3'): 0.7
+        }
+    }
+
+    # Create a mock calculator with interpret but no get_global_value
+    mock_calculator = MagicMock(spec=['interpret'])
+    mock_calculator.interpret.return_value = "Good agreement"
+    wrapper.calculators['raw'] = mock_calculator
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as tmp:
+        tmp_path = tmp.name
+
+    try:
+        # Call the method
+        wrapper._output_to_json(tmp_path)
+
+        # Verify interpret was called with the first pair's value
+        mock_calculator.interpret.assert_called_once_with(0.8)
+
+        # Check the JSON file contains the correct interpretation
+        with open(tmp_path, 'r') as f:
+            content = json.load(f)
+            assert 'interpretations' in content
+            assert 'raw' in content['interpretations']
+            expected = "Example interpretation for "
+            expected += "Annotator1-Annotator2: Good agreement"
+            assert content['interpretations']['raw'] == expected
+    finally:
+        # Clean up temporary file
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)

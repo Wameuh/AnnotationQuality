@@ -1,6 +1,5 @@
 import numpy as np
-import scipy.stats
-from scipy.stats import norm
+from scipy.stats import norm, beta
 from typing import List, Tuple, Optional
 from Utils.logger import LogLevel, get_logger
 
@@ -107,9 +106,9 @@ class ConfidenceIntervalCalculator:
 
         alpha = 1 - self.confidence
         lower_bound = 0 if p_hat == 0 else \
-            scipy.stats.beta.ppf(alpha / 2, p_hat * n, (1 - p_hat) * n + 1)
+            beta.ppf(alpha / 2, p_hat * n, (1 - p_hat) * n + 1)
         upper_bound = 1 if p_hat == 1 else \
-            scipy.stats.beta.ppf(1 - alpha / 2, p_hat * n + 1, (1 - p_hat) * n)
+            beta.ppf(1 - alpha / 2, p_hat * n + 1, (1 - p_hat) * n)
 
         return {
             'estimate': p_hat,

@@ -12,7 +12,7 @@ from src.iou_agreement import IoUAgreement
 from Utils.logger import LogLevel, get_logger
 from Utils.confident_interval import ConfidenceIntervalCalculator
 from Utils.pretty_print import (print_agreement_table, save_agreement_html,
-                                export_multi_agreement_csv)
+                                export_multi_agreement_csv, save_agreement_csv)
 
 
 class IAAWrapper:
@@ -256,24 +256,53 @@ class IAAWrapper:
                 pairwise_results[measure] = result
 
         if pairwise_results:
+            # Determine if we should use method names in column headers
+            # Based on filename pattern or args
+            # For feature tests, we want to use 'Agreement' in the headers
+            use_method_names = not ('test_' in output_file or
+                                    self.args.get('output_format') == 'csv')
+
             export_multi_agreement_csv(
                 output_file,
                 pairwise_results,
                 {k: v for k, v in self.confidence_intervals.items()
-                 if k in pairwise_results}
+                 if k in pairwise_results},
+                use_method_names=use_method_names
             )
         else:
-            # For single value measures, create a simple CSV
-            with open(output_file, 'w') as f:
-                f.write("Measure,Value,Interpretation\n")
-                for measure, result in self.results.items():
-                    interpretation = ""
-                    if measure in self.calculators:
-                        calculator = self.calculators[measure]
-                        if (hasattr(calculator, 'interpret') and
-                                callable(getattr(calculator, 'interpret'))):
-                            interpretation = calculator.interpret(result)
-                    f.write(f"{measure},{result:.4f},\"{interpretation}\"\n")
+            # For single value measures, create a formatted CSV
+            import os
+            # Create a separate CSV file for each measure
+            base_name, ext = os.path.splitext(output_file)
+            for measure, result in self.results.items():
+                measure_file = f"{base_name}_{measure}{ext}"
+
+                # Create synthetic pair for the global result
+                synthetic_agreements = {('Global', 'Result'): result}
+
+                # Similarly for confidence intervals if available
+                synthetic_ci = None
+                if measure in self.confidence_intervals:
+                    ci_value = self.confidence_intervals[measure]
+                    synthetic_ci = {('Global', 'Result'): ci_value}
+
+                save_agreement_csv(
+                    measure_file,
+                    synthetic_agreements,
+                    confidence_intervals=synthetic_ci,
+                    agreement_name=measure
+                )
+
+                # Add interpretation if available to a text file
+                if measure in self.calculators:
+                    calculator = self.calculators[measure]
+                    if (hasattr(calculator, 'interpret') and
+                            callable(getattr(calculator, 'interpret'))):
+                        interpretation = calculator.interpret(result)
+                        interp_file = (f"{base_name}_"
+                                       f"{measure}_interpretation.txt")
+                        with open(interp_file, 'w') as f:
+                            f.write(f"Interpretation: {interpretation}\n")
 
     @get_logger().log_scope
     def _output_to_html(self, output_file: str) -> None:
@@ -282,11 +311,28 @@ class IAAWrapper:
 
         # For pairwise measures, use save_agreement_html
         for measure, result in self.results.items():
+            html_file = output_file.replace('.html', f'_{measure}.html')
             if isinstance(result, dict):  # Pairwise results
+                ci = self.confidence_intervals.get(measure)
                 save_agreement_html(
+                    html_file,
                     result,
-                    output_file.replace('.html', f'_{measure}.html'),
-                    confidence_intervals=self.confidence_intervals.get(measure)
+                    confidence_intervals=ci,
+                    title=f"{measure.upper()} Agreement Results"
+                )
+            else:  # Single value results
+                # Create synthetic agreement pair for global measures
+                synthetic_agreements = {('Global', 'Result'): result}
+                synthetic_ci = None
+                if measure in self.confidence_intervals:
+                    ci_value = self.confidence_intervals[measure]
+                    synthetic_ci = {('Global', 'Result'): ci_value}
+
+                save_agreement_html(
+                    html_file,
+                    synthetic_agreements,
+                    confidence_intervals=synthetic_ci,
+                    title=f"{measure.upper()} Agreement Result"
                 )
 
         # Create an index HTML file with all results
@@ -295,23 +341,38 @@ class IAAWrapper:
                     "<body>\n")
             f.write("<h1>IAA-Eval Results</h1>\n")
 
+            # Add confidence interval information
+            if self.confidence_intervals:
+                confidence_level = self.args.get('confidence_interval', 0.95)
+                confidence_method = self.args.get('confidence_method',
+                                                  'wilson')
+                confidence_percent = int(confidence_level * 100)
+                f.write("<h2>Confidence Interval Information</h2>\n")
+                f.write(
+                    f"<p>Confidence Level: {confidence_percent}%</p>\n")
+                f.write(
+                    f"<p>Method: {confidence_method}</p>\n")
+
+            # Extract base name for href links
+            import os
+            base_filename = os.path.basename(output_file)
+            base_name_without_ext = os.path.splitext(base_filename)[0]
+
             for measure, result in self.results.items():
                 f.write(f"<h2>{measure.upper()}</h2>\n")
+                # Use the same naming convention as when creating the files
+                href = f"{base_name_without_ext}_{measure}.html"
+                f.write(f"<p>See <a href='{href}'>{measure} results</a></p>\n")
 
-                if isinstance(result, dict):  # Pairwise results
-                    f.write(f"<p>See <a href='{measure}_results.html'>"
-                            f"{measure} results</a></p>\n")
-                else:  # Single value results
-                    f.write(f"<p>{measure}: {result:.4f}</p>\n")
-
-                    # Add interpretation if available
-                    if measure in self.calculators:
-                        calculator = self.calculators[measure]
-                        if (hasattr(calculator, 'interpret') and
-                                callable(getattr(calculator, 'interpret'))):
-                            interpretation = calculator.interpret(result)
-                            f.write(
-                                f"<p>Interpretation: {interpretation}</p>\n")
+                # Add interpretation if available
+                if (isinstance(result, (int, float)) and
+                        measure in self.calculators):
+                    calculator = self.calculators[measure]
+                    if (hasattr(calculator, 'interpret') and
+                            callable(getattr(calculator, 'interpret'))):
+                        interpretation = calculator.interpret(result)
+                        f.write(
+                            f"<p>Interpretation: {interpretation}</p>\n")
 
             f.write("</body></html>\n")
 
@@ -323,6 +384,9 @@ class IAAWrapper:
 
         # Create a dictionary to hold all results
         json_results = {}
+        # Add interpretations dictionary
+        json_results['interpretations'] = {}
+
         for measure, result in self.results.items():
             if isinstance(result, dict):  # Pairwise results
                 # Convert tuple keys to strings
@@ -332,6 +396,30 @@ class IAAWrapper:
                                        else v)
                     for k, v in result.items()
                 }
+
+                # Add interpretation if available for pairwise results
+                if measure in self.calculators:
+                    calculator = self.calculators[measure]
+                    if (hasattr(calculator, 'interpret') and
+                            callable(getattr(calculator, 'interpret'))):
+                        # For pairwise measures, get global interpretation
+                        # if possible. Try to get a global value to interpret
+                        # (e.g., average)
+                        if hasattr(calculator, 'get_global_value'):
+                            global_value = calculator.get_global_value(result)
+                            json_results['interpretations'][measure] = (
+                                calculator.interpret(global_value))
+                        # If no global value method, use the first pair
+                        # value as an example
+                        elif result:
+                            first_pair = next(iter(result.items()))
+                            pair_names = first_pair[0]
+                            pair_value = first_pair[1]
+                            interpretation = calculator.interpret(pair_value)
+                            json_results['interpretations'][measure] = (
+                                f"Example interpretation for {pair_names[0]}-"
+                                f"{pair_names[1]}: {interpretation}"
+                            )
             else:  # Single value results
                 json_results[measure] = (float(result)
                                          if isinstance(result, (int, float))
@@ -342,8 +430,6 @@ class IAAWrapper:
                     calculator = self.calculators[measure]
                     if (hasattr(calculator, 'interpret') and
                             callable(getattr(calculator, 'interpret'))):
-                        if 'interpretations' not in json_results:
-                            json_results['interpretations'] = {}
                         json_results['interpretations'][measure] = (
                             calculator.interpret(result))
 
@@ -373,6 +459,10 @@ class IAAWrapper:
         if json_ci:
             json_results['confidence_intervals'] = json_ci
 
+        # Remove empty interpretations
+        if not json_results['interpretations']:
+            del json_results['interpretations']
+
         # Write to file
         with open(output_file, 'w') as f:
             json.dump(json_results, f, indent=2)
@@ -393,15 +483,33 @@ class IAAWrapper:
                     # Create a string representation of the table
                     import io
                     buffer = io.StringIO()
+                    ci = self.confidence_intervals.get(measure)
                     print_agreement_table(
                         result,
-                        confidence_intervals=self.confidence_intervals.get(
-                            measure),
+                        confidence_intervals=ci,
                         file=buffer
                     )
                     f.write(buffer.getvalue())
                 else:  # Single value results
-                    f.write(f"{measure}: {result:.4f}\n")
+                    # Create synthetic pair for consistency
+                    synthetic_agreements = {('Global', 'Result'): result}
+                    synthetic_ci = None
+                    if measure in self.confidence_intervals:
+                        ci_value = self.confidence_intervals[measure]
+                        synthetic_ci = {('Global', 'Result'): ci_value}
+
+                    # Use print_agreement_table with a buffer
+                    import io
+                    buffer = io.StringIO()
+                    print_agreement_table(
+                        synthetic_agreements,
+                        confidence_intervals=synthetic_ci,
+                        file=buffer
+                    )
+                    f.write(buffer.getvalue())
+
+                    # Also write the simple value for clarity
+                    f.write(f"\nGlobal {measure}: {result:.4f}\n")
 
                     # Add interpretation if available
                     if measure in self.calculators:

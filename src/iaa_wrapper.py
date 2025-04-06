@@ -531,6 +531,49 @@ class IAAWrapper:
         self.logger.info("Index HTML file created successfully")
 
     @get_logger().log_scope
+    def _output_to_text_file(self, output_file: str) -> None:
+        """Output results to text file."""
+        self.logger.info(f"Outputting results to text file: {output_file}")
+        with open(output_file, 'w') as f:
+            f.write("IAA-Eval Results\n")
+            f.write("===============\n\n\n")
+            for measure, result in self.results.items():
+                f.write(f"=== {measure.upper()} ===\n")
+
+                # Get confidence intervals if available
+                ci = None
+                if (self.confidence_intervals and
+                        measure in self.confidence_intervals):
+                    ci = self.confidence_intervals[measure]
+
+                # Handle single value results
+                if isinstance(result, dict) and 'overall' in result:
+                    agreements = {'overall': result['overall']}
+                    print_agreement_table(
+                        agreements,
+                        confidence_intervals=ci,
+                        file=f
+                    )
+                else:
+                    print_agreement_table(result, file=f)
+
+                # Add interpretation if available
+                if measure in self.calculators:
+                    calculator = self.calculators[measure]
+                    if hasattr(calculator, 'interpret'):
+                        if 'overall' in result:
+                            interpretation = calculator.interpret(
+                                result['overall']
+                            )
+                            f.write(f"\nInterpretation: {interpretation}\n")
+                        elif 'pairwise' in result and result['pairwise']:
+                            first_pair = next(iter(result['pairwise'].items()))
+                            pair_value = first_pair[1]
+                            interpretation = calculator.interpret(pair_value)
+                            f.write(f"\nInterpretation: {interpretation}\n")
+                f.write("\n")
+
+    @get_logger().log_scope
     def _output_to_json(self, output_file: str) -> None:
         """Output results to JSON file."""
         self.logger.info(f"Outputting results to JSON file: {output_file}")
@@ -542,76 +585,103 @@ class IAAWrapper:
         json_results['interpretations'] = {}
 
         for measure, result in self.results.items():
-            if isinstance(result, dict):  # Pairwise results
-                # Convert tuple keys to strings
-                json_results[measure] = {
-                    f"{k[0]}_{k[1]}": (float(v)
-                                       if isinstance(v, (int, float))
-                                       else v)
+            json_results[measure] = {}
+
+            # Handle overall result
+            if 'overall' in result:
+                json_results[measure]['overall'] = (
+                    float(result['overall'])
+                    if isinstance(result['overall'], (int, float))
+                    else result['overall']
+                )
+
+            # Handle direct pairwise results without 'pairwise' key
+            has_tuple_keys = any(isinstance(k, tuple) for k in result)
+            if isinstance(result, dict) and has_tuple_keys:
+                json_results[measure]['pairwise'] = {
+                    f"{k[0]}_{k[1]}": (
+                        float(v) if isinstance(v, (int, float)) else v)
                     for k, v in result.items()
+                    if isinstance(k, tuple)
+                }
+            elif 'pairwise' in result:
+                json_results[measure]['pairwise'] = {
+                    f"{k[0]}_{k[1]}": (
+                        float(v) if isinstance(v, (int, float)) else v)
+                    for k, v in result['pairwise'].items()
                 }
 
-                # Add interpretation if available for pairwise results
-                if measure in self.calculators:
-                    calculator = self.calculators[measure]
-                    if (hasattr(calculator, 'interpret') and
-                            callable(getattr(calculator, 'interpret'))):
-                        # For pairwise measures, get global interpretation
-                        # if possible. Try to get a global value to interpret
-                        # (e.g., average)
-                        if hasattr(calculator, 'get_global_value'):
-                            global_value = calculator.get_global_value(result)
+            # Add interpretation if available
+            if measure in self.calculators:
+                calculator = self.calculators[measure]
+                if (hasattr(calculator, 'interpret') and
+                        callable(getattr(calculator, 'interpret'))):
+                    # For pairwise measures, get global interpretation
+                    # if possible
+                    if hasattr(calculator, 'get_global_value'):
+                        global_value = calculator.get_global_value(result)
+                        json_results['interpretations'][measure] = (
+                            calculator.interpret(global_value))
+                    # If no global value method, use the overall result
+                    # or first pair value as an example
+                    elif 'overall' in result:
+                        json_results['interpretations'][measure] = (
+                            calculator.interpret(result['overall']))
+                    elif isinstance(result, dict):
+                        # Handle direct pairwise results
+                        first_pair = next(
+                            (k for k in result if isinstance(k, tuple)),
+                            None
+                        )
+                        if first_pair:
+                            pair_value = result[first_pair]
+                            interpretation = calculator.interpret(pair_value)
+                            name1, name2 = first_pair[0], first_pair[1]
+                            interp_text = (
+                                f"Example interpretation for "
+                                f"{name1}-{name2}: {interpretation}")
                             json_results['interpretations'][measure] = (
-                                calculator.interpret(global_value))
-                        # If no global value method, use the first pair
-                        # value as an example
-                        elif result:
-                            first_pair = next(iter(result.items()))
+                                interp_text)
+                        elif 'pairwise' in result and result['pairwise']:
+                            first_pair = next(iter(result['pairwise'].items()))
                             pair_names = first_pair[0]
                             pair_value = first_pair[1]
                             interpretation = calculator.interpret(pair_value)
+                            name1, name2 = pair_names[0], pair_names[1]
+                            interp_text = (
+                                f"Example interpretation for "
+                                f"{name1}-{name2}: {interpretation}")
                             json_results['interpretations'][measure] = (
-                                f"Example interpretation for {pair_names[0]}-"
-                                f"{pair_names[1]}: {interpretation}"
-                            )
-            else:  # Single value results
-                json_results[measure] = (float(result)
-                                         if isinstance(result, (int, float))
-                                         else result)
-
-                # Add interpretation if available
-                if measure in self.calculators:
-                    calculator = self.calculators[measure]
-                    if (hasattr(calculator, 'interpret') and
-                            callable(getattr(calculator, 'interpret'))):
-                        json_results['interpretations'][measure] = (
-                            calculator.interpret(result))
+                                interp_text)
 
         # Add confidence intervals if available
-        json_ci = {}
-        for measure, ci_dict in self.confidence_intervals.items():
-            if isinstance(ci_dict, dict):
-                if isinstance(next(iter(ci_dict.keys()), None), tuple):
-                    # Pairwise CI
-                    json_ci[measure] = {
+        if self.confidence_intervals:
+            json_results['confidence_intervals'] = {}
+            for measure, ci_dict in self.confidence_intervals.items():
+                ci_results = {}
+
+                # Handle overall CI
+                if 'overall' in ci_dict:
+                    overall_ci = {
+                        k: float(v) if isinstance(v, (int, float)) else v
+                        for k, v in ci_dict['overall'].items()
+                    }
+                    ci_results['overall'] = overall_ci
+
+                # Handle pairwise CI
+                if 'pairwise' in ci_dict:
+                    pairwise_ci = {
                         f"{k[0]}_{k[1]}": {
-                            ci_key: (float(ci_val)
-                                     if isinstance(ci_val, (int, float))
-                                     else ci_val)
+                            ci_key: float(ci_val)
+                            if isinstance(ci_val, (int, float))
+                            else ci_val
                             for ci_key, ci_val in ci_info.items()
                         }
-                        for k, ci_info in ci_dict.items()
+                        for k, ci_info in ci_dict['pairwise'].items()
                     }
-                else:  # Single value confidence interval
-                    json_ci[measure] = {
-                        ci_key: (float(ci_val)
-                                 if isinstance(ci_val, (int, float))
-                                 else ci_val)
-                        for ci_key, ci_val in ci_dict.items()
-                    }
+                    ci_results['pairwise'] = pairwise_ci
 
-        if json_ci:
-            json_results['confidence_intervals'] = json_ci
+                json_results['confidence_intervals'][measure] = ci_results
 
         # Remove empty interpretations
         if not json_results['interpretations']:
@@ -621,59 +691,6 @@ class IAAWrapper:
         with open(output_file, 'w') as f:
             json.dump(json_results, f, indent=2)
         self.logger.info(f"JSON results saved to: {output_file}")
-
-    @get_logger().log_scope
-    def _output_to_text_file(self, output_file: str) -> None:
-        """Output results to text file."""
-        self.logger.info(f"Outputting results to text file: {output_file}")
-
-        with open(output_file, 'w') as f:
-            f.write("IAA-Eval Results\n")
-            f.write("===============\n\n")
-
-            for measure, result in self.results.items():
-                f.write(f"\n=== {measure.upper()} ===\n")
-
-                if isinstance(result, dict):  # Pairwise results
-                    # Create a string representation of the table
-                    import io
-                    buffer = io.StringIO()
-                    ci = self.confidence_intervals.get(measure)
-                    print_agreement_table(
-                        result,
-                        confidence_intervals=ci,
-                        file=buffer
-                    )
-                    f.write(buffer.getvalue())
-                else:  # Single value results
-                    # Create synthetic pair for consistency
-                    synthetic_agreements = {('Global', 'Result'): result}
-                    synthetic_ci = None
-                    if measure in self.confidence_intervals:
-                        ci_value = self.confidence_intervals[measure]
-                        synthetic_ci = {('Global', 'Result'): ci_value}
-
-                    # Use print_agreement_table with a buffer
-                    import io
-                    buffer = io.StringIO()
-                    print_agreement_table(
-                        synthetic_agreements,
-                        confidence_intervals=synthetic_ci,
-                        file=buffer
-                    )
-                    f.write(buffer.getvalue())
-
-                    # Also write the simple value for clarity
-                    f.write(f"\nGlobal {measure}: {result:.4f}\n")
-
-                    # Add interpretation if available
-                    if measure in self.calculators:
-                        calculator = self.calculators[measure]
-                        if (hasattr(calculator, 'interpret') and
-                                callable(getattr(calculator, 'interpret'))):
-                            interpretation = calculator.interpret(result)
-                            f.write(f"Interpretation: {interpretation}\n")
-        self.logger.info(f"Text results saved to: {output_file}")
 
     @get_logger().log_scope
     def run(self) -> None:

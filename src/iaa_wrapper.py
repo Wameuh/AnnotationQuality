@@ -126,19 +126,21 @@ class IAAWrapper:
             # Get measure-specific parameters
             params = self._get_measure_params(measure)
 
-            # Determine if we should use calculate_pairwise or calculate
-            # Check if the calculator has a calculate_pairwise method and
-            # if it's explicitly requested
-            if hasattr(calculator, 'calculate_pairwise') and self.args.get(
-                    'pairwise', False):
-                self.results[measure] = calculator.calculate_pairwise(
+            # Always calculate both pairwise and overall results if available
+            results = {}
+
+            # Calculate pairwise results if the method exists
+            if hasattr(calculator, 'calculate_pairwise'):
+                self.logger.info(f"Calculating pairwise {measure}")
+                results['pairwise'] = calculator.calculate_pairwise(
                     self.data, **params)
-            else:
-                # Default to the standard calculate method
-                self.logger.info(
-                    f"Calculating {measure} with calculate method")
-                self.results[measure] = calculator.calculate(
-                    self.data, **params)
+
+            # Always calculate overall result
+            self.logger.info(f"Calculating overall {measure}")
+            results['overall'] = calculator.calculate(self.data, **params)
+
+            # Store results
+            self.results[measure] = results
 
             # Calculate confidence intervals if requested
             if self.args.get('confidence_interval', 0) > 0:
@@ -179,42 +181,58 @@ class IAAWrapper:
         )
 
         result = self.results[measure]
+        n = len(self.data)  # Number of rows in the data
+        ci_results = {}
 
-        # Calculate confidence intervals
-        if isinstance(result, dict):  # Pairwise results
-            # For each pair, calculate the confidence interval
-            ci_dict = {}
-            for pair, value in result.items():
-                # Use the wilson_interval method to calculate the confidence
-                # interval.
-                # We need to estimate the sample size
-                n = len(self.data)  # Number of rows in the data
-                ci_dict[pair] = calculator.wilson_interval(value, n)
+        # Calculate confidence intervals for pairwise results if they exist
+        if 'pairwise' in result:
+            pairwise_ci = {}
+            for pair, value in result['pairwise'].items():
+                pairwise_ci[pair] = calculator.wilson_interval(value, n)
+            ci_results['pairwise'] = pairwise_ci
 
-            self.confidence_intervals[measure] = ci_dict
-        else:  # Global result
-            # Calculate the confidence interval for the global result
-            n = len(self.data)  # Number of rows in the data
-            self.confidence_intervals[measure] = calculator.wilson_interval(
-                result, n)
+        # Calculate confidence interval for overall result
+        if 'overall' in result:
+            ci_results['overall'] = calculator.wilson_interval(
+                result['overall'], n)
+
+        self.confidence_intervals[measure] = ci_results
 
     @get_logger().log_scope
     def output_results(self) -> None:
         """Output the results in the requested format."""
         output_format = self.args['output_format']
         output_file = self.args['output']
-        if (output_format == 'console' or
-                (output_format == 'text' and not output_file)):
+
+        self.logger.info(f"Output format: {output_format}")
+        if output_file:
+            self.logger.info(f"Output will be saved to: {output_file}")
+
+        # Handle console output or text without file
+        is_console_output = (
+            output_format == 'console' or
+            (output_format == 'text' and not output_file)
+        )
+        if is_console_output:
             self._output_to_console()
-        elif output_file:
-            if output_format == 'csv':
-                self._output_to_csv(output_file)
-            elif output_format == 'html':
-                self._output_to_html(output_file)
-            elif output_format == 'json':
-                self._output_to_json(output_file)
-            elif output_format == 'text':
-                self._output_to_text_file(output_file)
+            return
+
+        # If no output file is specified, use a default name
+        if not output_file:
+            output_file = f"iaa_results.{output_format}"
+            self.logger.info(
+                f"No output file specified, using default: {output_file}"
+            )
+
+        # Handle different output formats
+        if output_format == 'csv':
+            self._output_to_csv(output_file)
+        elif output_format == 'html':
+            self._output_to_html(output_file)
+        elif output_format == 'json':
+            self._output_to_json(output_file)
+        elif output_format == 'text':
+            self._output_to_text_file(output_file)
         else:
             self.logger.warning(f"Unsupported output format: {output_format}")
             self._output_to_console()
@@ -222,27 +240,97 @@ class IAAWrapper:
     @get_logger().log_scope
     def _output_to_console(self) -> None:
         """Output results to console."""
-        self.logger.info("Outputting results to console")
+        try:
+            self.logger.debug("Preparing console output")
 
-        # Print each measure's results
-        for measure, result in self.results.items():
-            print(f"\n=== {measure.upper()} ===")
+            # Print a separator line to clearly separate logs from results
+            print("\n" + "=" * 80)
+            print("IAA-EVAL RESULTS".center(80))
+            print("=" * 80 + "\n")
 
-            if isinstance(result, dict):  # Pairwise results
-                print_agreement_table(
-                    result,
-                    confidence_intervals=self.confidence_intervals.get(measure)
-                )
-            else:  # Single value results
-                print(f"{measure}: {result:.4f}")
+            # Print each measure's results
+            for measure, results in self.results.items():
+                self.logger.debug(f"Processing measure: {measure}")
+                self.logger.debug(f"Results type: {type(results)}")
+                self.logger.debug(f"Results content: {results}")
 
-                # Add interpretation if available
-                if measure in self.calculators:
-                    calculator = self.calculators[measure]
-                    if (hasattr(calculator, 'interpret') and
-                            callable(getattr(calculator, 'interpret'))):
-                        interpretation = calculator.interpret(result)
-                        print(f"Interpretation: {interpretation}")
+                print(f"\n=== {measure.upper()} ===")
+
+                # Print overall result first
+                if 'overall' in results:
+                    print("\nOverall Result:")
+                    result = results['overall']
+                    self.logger.debug(f"Overall result type: {type(result)}")
+                    self.logger.debug(f"Overall result value: {result}")
+
+                    has_ci = (
+                        measure in self.confidence_intervals and
+                        'overall' in self.confidence_intervals[measure]
+                    )
+
+                    # Convert result to float if it's not already
+                    try:
+                        result_float = float(result)
+                        self.logger.debug(
+                            "Successfully converted result to float: "
+                            f"{result_float}"
+                        )
+                    except (TypeError, ValueError) as e:
+                        error_msg = (
+                            f"Could not convert result to float: {result}. "
+                            f"Error: {str(e)}"
+                        )
+                        self.logger.error(error_msg)
+                        result_float = result
+
+                    if has_ci:
+                        ci = self.confidence_intervals[measure]['overall']
+                        self.logger.debug(f"Confidence interval: {ci}")
+                        if isinstance(result_float, float):
+                            print(
+                                f"{measure}: {result_float:.4f} "
+                                f"(CI: {ci['ci_lower']:.4f} - "
+                                f"{ci['ci_upper']:.4f})"
+                            )
+                        else:
+                            print(f"{measure}: {result}")
+                    else:
+                        if isinstance(result_float, float):
+                            print(f"{measure}: {result_float:.4f}")
+                        else:
+                            print(f"{measure}: {result}")
+
+                    # Add interpretation if available
+                    if measure in self.calculators:
+                        calculator = self.calculators[measure]
+                        if (hasattr(calculator, 'interpret') and
+                                callable(getattr(calculator, 'interpret'))):
+                            interpretation = calculator.interpret(result)
+                            print(f"Interpretation: {interpretation}")
+
+                # Print pairwise results if available
+                if 'pairwise' in results:
+                    print("\nPairwise Results:")
+                    pairwise_ci = None
+                    has_pairwise_ci = (
+                        measure in self.confidence_intervals and
+                        'pairwise' in self.confidence_intervals[measure]
+                    )
+                    if has_pairwise_ci:
+                        ci_data = self.confidence_intervals[measure]
+                        pairwise_ci = ci_data['pairwise']
+                    print_agreement_table(
+                        results['pairwise'],
+                        confidence_intervals=pairwise_ci
+                    )
+
+            # Print a final separator
+            print("\n" + "=" * 80)
+        except Exception as e:
+            import traceback
+            self.logger.error(f"Exception in _output_to_console: {str(e)}")
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
 
     @get_logger().log_scope
     def _output_to_csv(self, output_file: str) -> None:
@@ -251,40 +339,53 @@ class IAAWrapper:
 
         # For pairwise measures, use export_multi_agreement_csv
         pairwise_results = {}
-        for measure, result in self.results.items():
-            if isinstance(result, dict):  # Pairwise results
-                pairwise_results[measure] = result
+        for measure, results in self.results.items():
+            if 'pairwise' in results:  # Check for pairwise results
+                pairwise_results[measure] = results['pairwise']
 
         if pairwise_results:
             # Determine if we should use method names in column headers
             # Based on filename pattern or args
             # For feature tests, we want to use 'Agreement' in the headers
-            use_method_names = not ('test_' in output_file or
-                                    self.args.get('output_format') == 'csv')
+            use_method_names = not (
+                'test_' in output_file or
+                self.args.get('output_format') == 'csv'
+            )
+
+            # Get pairwise confidence intervals if available
+            pairwise_ci = {}
+            for measure in pairwise_results:
+                if (measure in self.confidence_intervals and
+                        'pairwise' in self.confidence_intervals[measure]):
+                    pairwise_ci[measure] = (
+                        self.confidence_intervals[measure]['pairwise']
+                    )
 
             export_multi_agreement_csv(
                 output_file,
                 pairwise_results,
-                {k: v for k, v in self.confidence_intervals.items()
-                 if k in pairwise_results},
+                pairwise_ci,
                 use_method_names=use_method_names
             )
-        else:
-            # For single value measures, create a formatted CSV
-            import os
-            # Create a separate CSV file for each measure
-            base_name, ext = os.path.splitext(output_file)
-            for measure, result in self.results.items():
+            self.logger.info(f"Saved pairwise results to: {output_file}")
+
+        # Handle overall results
+        import os
+        base_name, ext = os.path.splitext(output_file)
+        for measure, results in self.results.items():
+            if 'overall' in results:
                 measure_file = f"{base_name}_{measure}{ext}"
+                overall_result = results['overall']
 
-                # Create synthetic pair for the global result
-                synthetic_agreements = {('Global', 'Result'): result}
+                # Create synthetic pair for the overall result
+                synthetic_agreements = {('Overall', 'Result'): overall_result}
 
-                # Similarly for confidence intervals if available
+                # Get confidence interval for overall result if available
                 synthetic_ci = None
-                if measure in self.confidence_intervals:
-                    ci_value = self.confidence_intervals[measure]
-                    synthetic_ci = {('Global', 'Result'): ci_value}
+                if (measure in self.confidence_intervals and
+                        'overall' in self.confidence_intervals[measure]):
+                    ci = self.confidence_intervals[measure]['overall']
+                    synthetic_ci = {('Overall', 'Result'): ci}
 
                 save_agreement_csv(
                     measure_file,
@@ -292,50 +393,80 @@ class IAAWrapper:
                     confidence_intervals=synthetic_ci,
                     agreement_name=measure
                 )
+                self.logger.info(f"Saved {measure} results to: {measure_file}")
 
                 # Add interpretation if available to a text file
                 if measure in self.calculators:
                     calculator = self.calculators[measure]
                     if (hasattr(calculator, 'interpret') and
                             callable(getattr(calculator, 'interpret'))):
-                        interpretation = calculator.interpret(result)
-                        interp_file = (f"{base_name}_"
-                                       f"{measure}_interpretation.txt")
+                        interpretation = calculator.interpret(overall_result)
+                        interp_file = (
+                            f"{base_name}_{measure}_interpretation.txt"
+                        )
                         with open(interp_file, 'w') as f:
                             f.write(f"Interpretation: {interpretation}\n")
+                        self.logger.info(
+                            f"Saved {measure} interpretation to: {interp_file}"
+                        )
 
     @get_logger().log_scope
     def _output_to_html(self, output_file: str) -> None:
         """Output results to HTML file."""
         self.logger.info(f"Outputting results to HTML file: {output_file}")
 
-        # For pairwise measures, use save_agreement_html
-        for measure, result in self.results.items():
+        # For each measure, create a separate HTML file
+        for measure, results in self.results.items():
             html_file = output_file.replace('.html', f'_{measure}.html')
-            if isinstance(result, dict):  # Pairwise results
-                ci = self.confidence_intervals.get(measure)
+
+            # Handle pairwise results if available
+            if 'pairwise' in results:
+                pairwise_ci = None
+                if (
+                    measure in self.confidence_intervals and
+                    'pairwise' in self.confidence_intervals[measure]
+                ):
+                    pairwise_ci = (
+                        self.confidence_intervals[measure]['pairwise']
+                    )
+
                 save_agreement_html(
                     html_file,
-                    result,
-                    confidence_intervals=ci,
+                    results['pairwise'],
+                    confidence_intervals=pairwise_ci,
                     title=f"{measure.upper()} Agreement Results"
                 )
-            else:  # Single value results
-                # Create synthetic agreement pair for global measures
-                synthetic_agreements = {('Global', 'Result'): result}
-                synthetic_ci = None
-                if measure in self.confidence_intervals:
-                    ci_value = self.confidence_intervals[measure]
-                    synthetic_ci = {('Global', 'Result'): ci_value}
 
-                save_agreement_html(
-                    html_file,
-                    synthetic_agreements,
-                    confidence_intervals=synthetic_ci,
-                    title=f"{measure.upper()} Agreement Result"
-                )
+            # Handle overall results
+            if 'overall' in results:
+                # Create synthetic agreement pair for overall result
+                overall_result = results['overall']
+                synthetic_agreements = {
+                    ('Overall', 'Result'): overall_result
+                }
+
+                # Handle confidence intervals for overall result
+                synthetic_ci = None
+                if (
+                    measure in self.confidence_intervals and
+                    'overall' in self.confidence_intervals[measure]
+                ):
+                    ci = self.confidence_intervals[measure]['overall']
+                    synthetic_ci = {('Overall', 'Result'): ci}
+
+                # If no pairwise results, save overall to its own file
+                if 'pairwise' not in results:
+                    save_agreement_html(
+                        html_file,
+                        synthetic_agreements,
+                        confidence_intervals=synthetic_ci,
+                        title=f"{measure.upper()} Overall Result"
+                    )
+
+            self.logger.info(f"Saved {measure} results to: {html_file}")
 
         # Create an index HTML file with all results
+        self.logger.info(f"Creating index HTML file: {output_file}")
         with open(output_file, 'w') as f:
             f.write("<html><head><title>IAA-Eval Results</title></head>"
                     "<body>\n")
@@ -344,8 +475,10 @@ class IAAWrapper:
             # Add confidence interval information
             if self.confidence_intervals:
                 confidence_level = self.args.get('confidence_interval', 0.95)
-                confidence_method = self.args.get('confidence_method',
-                                                  'wilson')
+                confidence_method = self.args.get(
+                    'confidence_method',
+                    'wilson'
+                )
                 confidence_percent = int(confidence_level * 100)
                 f.write("<h2>Confidence Interval Information</h2>\n")
                 f.write(
@@ -358,24 +491,44 @@ class IAAWrapper:
             base_filename = os.path.basename(output_file)
             base_name_without_ext = os.path.splitext(base_filename)[0]
 
-            for measure, result in self.results.items():
+            for measure, results in self.results.items():
                 f.write(f"<h2>{measure.upper()}</h2>\n")
-                # Use the same naming convention as when creating the files
-                # Ensures links match the actual file names
-                html_file_name = base_name_without_ext + f"_{measure}.html"
-                f.write(f"<p>See <a href='{html_file_name}'>{measure} results</a></p>\n")
 
-                # Add interpretation if available
-                if (isinstance(result, (int, float)) and
-                        measure in self.calculators):
-                    calculator = self.calculators[measure]
-                    if (hasattr(calculator, 'interpret') and
-                            callable(getattr(calculator, 'interpret'))):
-                        interpretation = calculator.interpret(result)
-                        f.write(
-                            f"<p>Interpretation: {interpretation}</p>\n")
+                # Add overall result if available
+                if 'overall' in results:
+                    result = results['overall']
+                    f.write("<h3>Overall Result</h3>\n")
+
+                    # Format the result with confidence interval if available
+                    result_str = f"{result:.4f}"
+                    if (
+                        measure in self.confidence_intervals and
+                        'overall' in self.confidence_intervals[measure]
+                    ):
+                        ci = self.confidence_intervals[measure]['overall']
+                        result_str += (
+                            f" (CI: {ci['ci_lower']:.4f} - "
+                            f"{ci['ci_upper']:.4f})"
+                        )
+                    f.write(f"<p>{result_str}</p>\n")
+
+                    # Add interpretation if available
+                    if measure in self.calculators:
+                        calculator = self.calculators[measure]
+                        if (hasattr(calculator, 'interpret') and
+                                callable(getattr(calculator, 'interpret'))):
+                            interpretation = calculator.interpret(result)
+                            f.write(
+                                f"<p>Interpretation: {interpretation}</p>\n")
+
+                # Add link to detailed results
+                html_file_name = base_name_without_ext + f"_{measure}.html"
+                f.write(
+                    f"<p>See <a href='{html_file_name}'>detailed {measure} "
+                    "results</a></p>\n")
 
             f.write("</body></html>\n")
+        self.logger.info("Index HTML file created successfully")
 
     @get_logger().log_scope
     def _output_to_json(self, output_file: str) -> None:
@@ -467,6 +620,7 @@ class IAAWrapper:
         # Write to file
         with open(output_file, 'w') as f:
             json.dump(json_results, f, indent=2)
+        self.logger.info(f"JSON results saved to: {output_file}")
 
     @get_logger().log_scope
     def _output_to_text_file(self, output_file: str) -> None:
@@ -519,6 +673,7 @@ class IAAWrapper:
                                 callable(getattr(calculator, 'interpret'))):
                             interpretation = calculator.interpret(result)
                             f.write(f"Interpretation: {interpretation}\n")
+        self.logger.info(f"Text results saved to: {output_file}")
 
     @get_logger().log_scope
     def run(self) -> None:

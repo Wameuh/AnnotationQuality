@@ -2,11 +2,16 @@
 source =
     src
     Utils
+    iaa_eval.py
+
 omit =
     */site-packages/*
+    */dist-packages/*
     */tests/*
-    */Tests/*
-    */__init__.py
+    */test_*.py
+    */__pycache__/*
+    */.pytest_cache/*
+    conftest.py
 
 [report]
 exclude_lines =
@@ -16,7 +21,7 @@ exclude_lines =
     if __name__ == .__main__.:
     pass
     raise ImportError
-    except ImportError:
+    except ImportError
 
 [html]
 directory = coverage_html

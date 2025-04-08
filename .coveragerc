@@ -11,6 +11,7 @@ omit =
     */test_*.py
     */__pycache__/*
     */.pytest_cache/*
+    */Examples/*
     conftest.py
     setup.py
 

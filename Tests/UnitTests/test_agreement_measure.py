@@ -4,9 +4,9 @@ from src.agreement_measure import AgreementMeasure
 from Utils.logger import LogLevel
 
 
-class TestAgreementMeasure(AgreementMeasure):
+class MockAgreementMeasure(AgreementMeasure):
     """
-    Test implementation of AgreementMeasure that only implements calculate.
+    Mock implementation of AgreementMeasure that only implements calculate.
     """
 
     def calculate(self, df):
@@ -20,7 +20,7 @@ def test_calculate_pairwise_not_implemented():
     implemented.
     """
     # Create an instance of our test class
-    measure = TestAgreementMeasure(level=LogLevel.DEBUG)
+    measure = MockAgreementMeasure(level=LogLevel.DEBUG)
 
     # Create a dummy DataFrame
     df = pd.DataFrame({'A': [1, 2, 3], 'B': [4, 5, 6]})
@@ -30,14 +30,14 @@ def test_calculate_pairwise_not_implemented():
         measure.calculate_pairwise(df)
 
     # Check that the error message contains the class name
-    assert "TestAgreementMeasure" in str(excinfo.value)
+    assert "MockAgreementMeasure" in str(excinfo.value)
     assert "does not implement calculate_pairwise" in str(excinfo.value)
 
 
 def test_calculate_from_dataframe():
     """Test that calculate_from_dataframe calls calculate."""
     # Create an instance of our test class
-    measure = TestAgreementMeasure(level=LogLevel.DEBUG)
+    measure = MockAgreementMeasure(level=LogLevel.DEBUG)
 
     # Create a dummy DataFrame
     df = pd.DataFrame({'A': [1, 2, 3], 'B': [4, 5, 6]})
@@ -51,7 +51,7 @@ def test_calculate_from_dataframe():
 
 def test_interpret():
     """Test the interpret method."""
-    measure = TestAgreementMeasure(level=LogLevel.DEBUG)
+    measure = MockAgreementMeasure(level=LogLevel.DEBUG)
 
     # Test different agreement values
     assert "Poor agreement" in measure.interpret(-0.1)

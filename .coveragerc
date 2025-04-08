@@ -2,6 +2,7 @@
 source =
     src
     Utils
+    .
 
 omit =
     */site-packages/*
@@ -11,6 +12,7 @@ omit =
     */__pycache__/*
     */.pytest_cache/*
     conftest.py
+    setup.py
 
 [report]
 exclude_lines =

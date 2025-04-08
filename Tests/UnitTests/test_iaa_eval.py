@@ -1,17 +1,8 @@
 """Unit tests for iaa_eval.py."""
 import pytest
-import sys
-import os
 from unittest.mock import patch, MagicMock
 from io import StringIO
-
-# Add the project root to the Python path
-project_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '../..')
-)
-sys.path.insert(0, project_root)
-
-from iaa_eval import main  # noqa: E402
+import iaa_eval
 from Utils.logger import LogLevel  # noqa: E402
 
 
@@ -56,7 +47,7 @@ def test_main_success(mock_args, mock_wrapper):
     mock_logger = MagicMock()
     with patch('iaa_eval.parse_arguments', return_value=mock_args):
         with patch('iaa_eval.get_logger', return_value=mock_logger):
-            result = main()
+            result = iaa_eval.main()
             assert result == 0
             mock_wrapper.assert_called_once_with(mock_args)
             mock_wrapper.return_value.run.assert_called_once()
@@ -72,7 +63,7 @@ def test_main_error_in_wrapper(mock_args, mock_wrapper):
 
     with patch('iaa_eval.parse_arguments', return_value=mock_args):
         with patch('iaa_eval.get_logger', return_value=mock_logger):
-            result = main()
+            result = iaa_eval.main()
             assert result == 1
             mock_logger.error.assert_called_once_with(
                 f"Error in IAA-Eval: {error_msg}"
@@ -85,7 +76,7 @@ def test_main_keyboard_interrupt(mock_args, mock_wrapper):
 
     with patch('iaa_eval.parse_arguments', return_value=mock_args):
         with patch('sys.stderr', new=StringIO()) as fake_stderr:
-            result = main()
+            result = iaa_eval.main()
             assert result == 130
             assert "Operation cancelled by user" in fake_stderr.getvalue()
 
@@ -98,7 +89,7 @@ def test_main_fatal_error(mock_args):
         side_effect=Exception(error_msg)
     ):
         with patch('sys.stderr', new=StringIO()) as fake_stderr:
-            result = main()
+            result = iaa_eval.main()
             assert result == 1
             assert f"Fatal error: {error_msg}" in fake_stderr.getvalue()
 
@@ -121,7 +112,7 @@ def test_main_log_levels(mock_args, mock_wrapper, log_level, expected_enum):
             'iaa_eval.get_logger',
             return_value=mock_logger
         ) as mock_get_logger:
-            main()
+            iaa_eval.main()
 
             # Verify the logger was created with correct log level
             expected_level = getattr(LogLevel, expected_enum)

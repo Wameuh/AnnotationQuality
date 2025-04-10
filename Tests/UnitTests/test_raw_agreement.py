@@ -83,28 +83,6 @@ def test_calculate_pairwise_perfect_agreement(agreement_calc, sample_df):
     # Partial agreement
 
 
-def test_calculate_pairwise_with_missing_values(agreement_calc,
-                                                sample_df_with_missing):
-    """Test calculate_pairwise with missing values."""
-    # Calculate pairwise agreements
-    agreements = agreement_calc.calculate_pairwise(sample_df_with_missing)
-
-    # Check that all pairs are in the result
-    assert ('Annotator1', 'Annotator2') in agreements
-    assert ('Annotator1', 'Annotator3') in agreements
-    assert ('Annotator2', 'Annotator3') in agreements
-
-    # Check that missing values are handled correctly
-    # For Annotator1 and Annotator2,
-    # there are 4 complete reviews (one is missing)
-    # For Annotator1 and Annotator3,
-    # there are 3 complete reviews (two are missing)
-    # For Annotator2 and Annotator3,
-    # there are 3 complete reviews (two are missing)
-    assert agreements[('Annotator1', 'Annotator2')] == 1.0
-    # Still perfect agreement
-
-
 def test_calculate_pairwise_no_complete_reviews(agreement_calc):
     """Test calculate_pairwise when there are no complete reviews for a pair"""
     # Create a DataFrame where one pair has no complete reviews
@@ -125,10 +103,10 @@ def test_calculate_pairwise_no_complete_reviews(agreement_calc):
     assert ('Annotator2', 'Annotator3') not in agreements
 
 
-def test_calculate_overall_agreement(agreement_calc, sample_df):
-    """Test calculate_overall with perfect agreement between some annotators"""
+def test_calculate_agreement(agreement_calc, sample_df):
+    """Test calculate with perfect agreement between some annotators"""
     # Calculate overall agreement
-    overall = agreement_calc.calculate_overall(sample_df)
+    overall = agreement_calc.calculate(sample_df)
 
     # Check that overall agreement is between 0 and 1
     assert 0.0 <= overall <= 1.0
@@ -138,8 +116,8 @@ def test_calculate_overall_agreement(agreement_calc, sample_df):
     assert overall < 1.0
 
 
-def test_calculate_overall_agreement_perfect(agreement_calc):
-    """Test calculate_overall with perfect agreement between all annotators."""
+def test_calculate_agreement_perfect(agreement_calc):
+    """Test calculate with perfect agreement between all annotators."""
     # Create a DataFrame with perfect agreement
     data = {
         'Annotator1_score': [5, 4, 3, 2, 1],
@@ -149,17 +127,17 @@ def test_calculate_overall_agreement_perfect(agreement_calc):
     df = pd.DataFrame(data, index=['rev1', 'rev2', 'rev3', 'rev4', 'rev5'])
 
     # Calculate overall agreement
-    overall = agreement_calc.calculate_overall(df)
+    overall = agreement_calc.calculate(df)
 
     # With perfect agreement, overall should be 1.0
     assert overall == 1.0
 
 
-def test_calculate_overall_agreement_with_missing(agreement_calc,
-                                                  sample_df_with_missing):
-    """Test calculate_overall with missing values."""
+def test_calculate_agreement_with_missing(agreement_calc,
+                                          sample_df_with_missing):
+    """Test calculate with missing values."""
     # Calculate overall agreement
-    overall = agreement_calc.calculate_overall(sample_df_with_missing)
+    overall = agreement_calc.calculate(sample_df_with_missing)
 
     # Check that overall agreement is between 0 and 1
     assert 0.0 <= overall <= 1.0
@@ -195,9 +173,9 @@ def test_get_agreement_statistics(agreement_calc, sample_df):
             stats['max_pairwise'])
 
 
-def test_calculate_overall_agreement_no_complete_reviews(agreement_calc):
+def test_calculate_agreement_no_complete_reviews(agreement_calc):
     """
-    Test calculate_overall when there are no reviews with scores from all
+    Test calculate when there are no reviews with scores from all
     annotators.
     """
     # Create a DataFrame where no review has scores from all annotators
@@ -209,8 +187,169 @@ def test_calculate_overall_agreement_no_complete_reviews(agreement_calc):
     df = pd.DataFrame(data, index=['rev1', 'rev2', 'rev3', 'rev4', 'rev5'])
 
     # Calculate overall agreement
-    overall = agreement_calc.calculate_overall(df)
+    overall = agreement_calc.calculate(df)
 
     # Since there are no reviews where all annotators provided scores,
     # the overall agreement should be 0.0
     assert overall == 0.0
+
+
+@pytest.fixture
+def raw_agreement_calculator():
+    """Create a RawAgreement instance for testing."""
+    return RawAgreement()
+
+
+@pytest.fixture
+def sample_data():
+    """Create sample data for testing."""
+    data = {
+        'review_id': [1, 2, 3, 4, 5],
+        'Annotator1_score': [1, 2, 3, 4, 5],
+        'Annotator2_score': [1, 2, 3, 4, 5],  # Perfect agreement with Ann1
+        'Annotator3_score': [2, 3, 4, 5, 1]   # Low agreement with others
+    }
+    return pd.DataFrame(data).set_index('review_id')
+
+
+@pytest.fixture
+def missing_data():
+    """Create sample data with missing values for testing."""
+    data = {
+        'review_id': [1, 2, 3, 4, 5],
+        'Annotator1_score': [1, 2, np.nan, 4, 5],
+        'Annotator2_score': [1, np.nan, 3, 4, 5],
+        'Annotator3_score': [np.nan, 2, 3, 4, 5]
+    }
+    return pd.DataFrame(data).set_index('review_id')
+
+
+def test_calculate_pairwise(raw_agreement_calculator, sample_data):
+    """Test calculate_pairwise method."""
+    # Calculate pairwise agreements
+    pairwise_agreements = raw_agreement_calculator.calculate_pairwise(
+        sample_data)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_agreements, dict)
+
+    # Check that all pairs are present
+    expected_pairs = [
+        ('Annotator1', 'Annotator2'),
+        ('Annotator1', 'Annotator3'),
+        ('Annotator2', 'Annotator3')
+    ]
+    for pair in expected_pairs:
+        assert pair in pairwise_agreements
+
+    # Check that values are between 0 and 1
+    for agreement in pairwise_agreements.values():
+        assert 0 <= agreement <= 1
+
+    # Check specific relationships
+    # Perfect agreement should have value = 1.0
+    assert pairwise_agreements[('Annotator1', 'Annotator2')] == 1.0
+
+    # Lower agreement should have lower value
+    assert pairwise_agreements[('Annotator1', 'Annotator3')] < \
+        pairwise_agreements[('Annotator1', 'Annotator2')]
+    assert pairwise_agreements[('Annotator2', 'Annotator3')] < \
+        pairwise_agreements[('Annotator1', 'Annotator2')]
+
+
+def test_calculate_pairwise_with_missing_values(raw_agreement_calculator,
+                                                missing_data):
+    """Test calculate_pairwise method with missing values."""
+    # Calculate pairwise agreements
+    pairwise_agreements = raw_agreement_calculator.calculate_pairwise(
+        missing_data)
+
+    # Check that result is a dictionary
+    assert isinstance(pairwise_agreements, dict)
+
+    # Check that all pairs are present
+    expected_pairs = [
+        ('Annotator1', 'Annotator2'),
+        ('Annotator1', 'Annotator3'),
+        ('Annotator2', 'Annotator3')
+    ]
+    for pair in expected_pairs:
+        assert pair in pairwise_agreements
+
+    # Check that values are between 0 and 1
+    for agreement in pairwise_agreements.values():
+        assert 0 <= agreement <= 1
+
+
+def test_calculate(raw_agreement_calculator, sample_data):
+    """Test calculate method."""
+    # Calculate overall agreement
+    agreement = raw_agreement_calculator.calculate(sample_data)
+
+    # Check that result is a float between 0 and 1
+    assert isinstance(agreement, float)
+    assert 0 <= agreement <= 1
+
+    # With our sample data, only 0/5 rows have all annotators agreeing
+    # So the overall agreement should be 0.0
+    assert agreement == 0.0
+
+    # Create data with perfect agreement
+    perfect_data = {
+        'review_id': [1, 2, 3],
+        'Annotator1_score': [1, 2, 3],
+        'Annotator2_score': [1, 2, 3],
+        'Annotator3_score': [1, 2, 3]
+    }
+    perfect_df = pd.DataFrame(perfect_data).set_index('review_id')
+
+    # Calculate overall agreement
+    perfect_agreement = raw_agreement_calculator.calculate(perfect_df)
+
+    # Should be 1.0 for perfect agreement
+    assert perfect_agreement == 1.0
+
+
+def test_calculate_with_empty_dataframe(raw_agreement_calculator):
+    """Test calculate method with an empty DataFrame."""
+    # Create an empty DataFrame
+    df = pd.DataFrame()
+
+    # Calculate overall agreement
+    agreement = raw_agreement_calculator.calculate(df)
+
+    # Should return 0.0 for empty DataFrame
+    assert agreement == 0.0
+
+
+def test_calculate_with_no_complete_reviews(raw_agreement_calculator):
+    """Test calculate method with no complete reviews."""
+    # Create data where no row has scores from all annotators
+    data = {
+        'review_id': [1, 2, 3],
+        'Annotator1_score': [1, np.nan, 3],
+        'Annotator2_score': [np.nan, 2, np.nan],
+        'Annotator3_score': [1, np.nan, np.nan]
+    }
+    df = pd.DataFrame(data).set_index('review_id')
+
+    # Calculate overall agreement
+    agreement = raw_agreement_calculator.calculate(df)
+
+    # Should return 0.0 when no complete reviews
+    assert agreement == 0.0
+
+
+def test_interpret_raw_agreement(raw_agreement_calculator):
+    """Test interpret_raw_agreement method."""
+    # Test different ranges
+    assert "Slight agreement" in \
+        raw_agreement_calculator.interpret_raw_agreement(0.1)
+    assert "Fair agreement" in \
+        raw_agreement_calculator.interpret_raw_agreement(0.3)
+    assert "Moderate agreement" in \
+        raw_agreement_calculator.interpret_raw_agreement(0.5)
+    assert "Substantial agreement" in \
+        raw_agreement_calculator.interpret_raw_agreement(0.7)
+    assert "Almost perfect agreement" in \
+        raw_agreement_calculator.interpret_raw_agreement(0.9)

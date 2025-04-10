@@ -67,6 +67,13 @@ test_suites = {
                      'UnitTests',
                      'test_distance_based_cell_agreement.py')
     ],
+    'icc': [
+        os.path.join('Tests', 'UnitTests', 'test_icc.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_icc_real_data.py')
+    ],
+    'argparser': [
+        os.path.join('Tests', 'UnitTests', 'test_argparser.py')
+    ],
     'all': [
         os.path.join('Tests', 'UnitTests', 'test_logger.py'),
         os.path.join('Tests', 'UnitTests', 'test_data_loader.py'),
@@ -92,7 +99,10 @@ test_suites = {
                      'test_boundary_weighted_fleiss_kappa.py'),
         os.path.join('Tests',
                      'UnitTests',
-                     'test_distance_based_cell_agreement.py')
+                     'test_distance_based_cell_agreement.py'),
+        os.path.join('Tests', 'UnitTests', 'test_icc.py'),
+        os.path.join('Tests', 'FeatureTests', 'test_icc_real_data.py'),
+        os.path.join('Tests', 'UnitTests', 'test_argparser.py')
     ]
 }
 
@@ -117,6 +127,16 @@ def test_suite(request):
 
 
 # Common fixtures that can be used across test files
+@pytest.fixture(autouse=True)
+def reset_logger_singleton():
+    """Reset the logger singleton before and after each test."""
+    # Reset before test
+    Logger._instance = None
+    yield
+    # Reset after test
+    Logger._instance = None
+
+
 @pytest.fixture
 def logger():
     """Fixture providing a logger instance."""
@@ -188,7 +208,27 @@ def dbcaa_calc(logger):
     return DistanceBasedCellAgreement(logger)
 
 
-# Ajoutez cette ligne pour inclure explicitement le répertoire des tests
+@pytest.fixture
+def icc_calc(logger):
+    """Fixture providing an ICC instance."""
+    from src.icc import ICC
+    return ICC(logger)
+
+
+@pytest.fixture
+def sample_input_file(tmp_path):
+    """Create a sample input file for testing."""
+    file_path = tmp_path / "sample_input.csv"
+    with open(file_path, 'w') as f:
+        f.write("id,Annotator1,Annotator2,Annotator3\n")
+        f.write("1,1,1,1\n")
+        f.write("2,2,2,2\n")
+        f.write("3,3,3,2\n")
+        f.write("4,4,4,4\n")
+        f.write("5,5,4,5\n")
+    return str(file_path)
+
+
 pytest_plugins = [
     "Tests.UnitTests.test_raw_agreement",
     "Tests.UnitTests.test_cohen_kappa",
@@ -200,5 +240,8 @@ pytest_plugins = [
     "Tests.FeatureTests.test_krippendorff_alpha_real_data",
     "Tests.FeatureTests.test_f_measure_real_data",
     "Tests.UnitTests.test_boundary_weighted_fleiss_kappa",
-    "Tests.UnitTests.test_distance_based_cell_agreement"
+    "Tests.UnitTests.test_distance_based_cell_agreement",
+    "Tests.UnitTests.test_icc",
+    "Tests.FeatureTests.test_icc_real_data",
+    "Tests.UnitTests.test_argparser"
 ]

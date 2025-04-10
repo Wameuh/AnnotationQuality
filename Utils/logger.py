@@ -13,6 +13,7 @@ class LogLevel(Enum):
     INFO = 1
     WARNING = 2
     ERROR = 3    # Least verbose
+    CRITICAL = 4  # Added CRITICAL level
 
 
 class ContextLogger:
@@ -200,6 +201,10 @@ class Logger:
     def debug(self, message: str) -> None:
         """Log a debug message if level is DEBUG."""
         self._log(LogLevel.DEBUG, message)
+
+    def critical(self, message: str) -> None:
+        """Log a critical message if level is CRITICAL."""
+        self._log(LogLevel.CRITICAL, message)
 
     def set_level(self, level: LogLevel) -> None:
         """

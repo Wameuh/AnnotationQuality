@@ -1,6 +1,5 @@
 import os
 import pytest
-import pandas as pd
 from src.dataPreparation import DataLoader
 from src.fleiss_kappa import FleissKappa
 from Utils.logger import Logger, LogLevel
@@ -28,7 +27,10 @@ def fleiss_kappa_calc(logger):
 def real_data(data_loader):
     """Fixture providing the real data from the Reviews_annotated.csv file."""
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    data_file = os.path.join(base_dir, "Tests", "Assets", "Reviews_annotated.csv")
+    data_file = os.path.join(base_dir,
+                             "Tests",
+                             "Assets",
+                             "Reviews_annotated.csv")
 
     # Load the data
     df = data_loader.load_data(data_file)
@@ -72,7 +74,8 @@ def test_fleiss_kappa_by_category(fleiss_kappa_calc, real_data):
         assert round(kappas_by_category[category], 4) == expected_kappa
 
         # Check the interpretation
-        interpretation = fleiss_kappa_calc.interpret_kappa(kappas_by_category[category])
+        interpretation = fleiss_kappa_calc.interpret_kappa(
+            kappas_by_category[category])
         if category == 1:
             assert "Substantial agreement" in interpretation
         elif category == 2:
@@ -86,7 +89,9 @@ def test_fleiss_kappa_by_category(fleiss_kappa_calc, real_data):
 
 
 def test_fleiss_kappa_results_consistency(fleiss_kappa_calc, real_data):
-    """Test that the overall Kappa and category Kappas match expected values."""
+    """
+    Test that the overall Kappa and category Kappas match expected values.
+    """
     # Calculate overall Fleiss' Kappa
     overall_kappa = fleiss_kappa_calc.calculate(real_data)
 
@@ -100,4 +105,5 @@ def test_fleiss_kappa_results_consistency(fleiss_kappa_calc, real_data):
     assert round(kappas_by_category[5], 4) == 0.8324
 
     # The overall Kappa is different from the category 5 Kappa
-    # This is expected because the overall Kappa considers all categories together
+    # This is expected because the overall Kappa considers all categories
+    # together

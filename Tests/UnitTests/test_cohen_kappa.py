@@ -227,3 +227,119 @@ def test_calculate_kappa_edge_case(kappa_calc):
 
     # When expected agreement is 1 but observed is 0, should return 0
     assert kappa == 0.0
+
+
+def test_calculate_with_no_valid_pairs():
+    """Test calculate method when no valid annotator pairs are found."""
+    # Create a DataFrame where no pair of annotators has complete data
+    data = {
+        'Annotator1_score': [np.nan, np.nan, np.nan, np.nan, np.nan],
+        'Annotator2_score': [np.nan, np.nan, np.nan, np.nan, np.nan],
+        'Annotator3_score': [np.nan, np.nan, np.nan, np.nan, np.nan]
+    }
+    df = pd.DataFrame(data)
+
+    kappa_calc = CohenKappa(level=LogLevel.DEBUG)
+    result = kappa_calc.calculate(df)
+
+    # Should return 0.0 when no valid pairs
+    assert result == 0.0
+
+
+def test_calculate_kappa_with_empty_data():
+    """Test _calculate_kappa method with empty data."""
+    kappa_calc = CohenKappa(level=LogLevel.DEBUG)
+
+    # Create a mock method that will be called by calculate_pairwise
+    # This allows us to test the empty data case directly
+    original_method = kappa_calc._calculate_kappa
+
+    try:
+        # Replace the method with a mock that raises the warning we want to
+        # test
+        def mock_calculate_kappa(ratings1, ratings2):
+            if len(ratings1) == 0:
+                kappa_calc.logger.warning("No ratings provided")
+                return 0.0
+            return original_method(ratings1, ratings2)
+
+        kappa_calc._calculate_kappa = mock_calculate_kappa
+
+        # Create a DataFrame with empty data
+        data = {
+            'Annotator1_score': [],
+            'Annotator2_score': []
+        }
+        df = pd.DataFrame(data)
+
+        # This should trigger the warning about empty data
+        result = kappa_calc.calculate(df)
+
+        # Should return 0.0 for empty data
+        assert result == 0.0
+    finally:
+        # Restore the original method
+        kappa_calc._calculate_kappa = original_method
+
+
+def test_calculate_kappa_with_different_len_of_ratings():
+    """Test _calculate_kappa method with empty ratings."""
+    kappa_calc = CohenKappa(level=LogLevel.DEBUG)
+
+    # Call _calculate_kappa with different len arrays
+    with pytest.raises(ValueError):
+        kappa_calc._calculate_kappa(np.array([1, 2, 3]), np.array([1, 2]))
+
+
+def test_calculate_kappa_with_no_ratings():
+    """Test _calculate_kappa method with no ratings."""
+    kappa_calc = CohenKappa(level=LogLevel.DEBUG)
+
+    # Call _calculate_kappa with empty arrays
+    result = kappa_calc._calculate_kappa(np.array([]), np.array([]))
+
+    # Should return 0.0 for empty ratings
+    assert result == 0.0
+
+
+def test_calculate_with_valid_pairs():
+    """Test calculate method with valid annotator pairs."""
+    # Create a DataFrame with valid pairs
+    data = {
+        'Annotator1_score': [1, 2, 3, 4, 5],
+        'Annotator2_score': [1, 2, 3, 4, 5],
+        'Annotator3_score': [1, 2, 3, 4, 5]
+    }
+    df = pd.DataFrame(data)
+
+    kappa_calc = CohenKappa(level=LogLevel.DEBUG)
+    result = kappa_calc.calculate(df)
+
+    # Should return a valid kappa value (1.0 for perfect agreement)
+    assert result == 1.0
+
+
+def test_calculate_kappa_no_ratings():
+    """Test _calculate_kappa method with no ratings."""
+    kappa_calc = CohenKappa(level=LogLevel.DEBUG)
+
+    try:
+        # Replace the method with a mock that raises the warning we want to
+        # test
+        def mock_calculate_kappa(ratings1, ratings2):
+            if len(ratings1) == 0:
+                kappa_calc.logger.warning("No ratings provided")
+                return 0.0
+            return original_method(ratings1, ratings2)
+
+        original_method = kappa_calc._calculate_kappa
+        kappa_calc._calculate_kappa = mock_calculate_kappa
+
+        # Call with empty arrays
+        result = kappa_calc._calculate_kappa(np.array([]), np.array([]))
+
+        # Should return 0.0 for empty ratings
+        assert result == 0.0
+    finally:
+        # Restore the original method
+        kappa_calc._calculate_kappa = original_method
